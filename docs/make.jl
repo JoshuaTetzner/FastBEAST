@@ -1,4 +1,5 @@
 using FastBEAST
+Pkg.add("Documenter")
 using Documenter
 makedocs(
          sitename = "FastBEAST.jl",
