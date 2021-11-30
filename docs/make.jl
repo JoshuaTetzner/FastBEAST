@@ -10,5 +10,5 @@ makedocs(
                 "Home" => "index.md"
                ])
 deploydocs(
-    repo="https://github.com/JoshuaTetzner/FastBEAST",
+    repo="github.com/JoshuaTetzner/FastBEAST",
 )
