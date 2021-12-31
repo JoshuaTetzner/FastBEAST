@@ -42,3 +42,23 @@ function estimate_reldifference(hmat, refmat; tol=1e-4)
 
     return sqrt(σnew)/norm_refmat
 end
+
+function getfullmatrix(hmat, Ns,Nt)
+    fullhmat = zeros(Nt,Ns)
+    for full in hmat.fullmatrixviews
+        for i = 1:length(full.rightindices)
+            for j = 1:length(full.leftindices)
+                fullhmat[full.leftindices[j], full.rightindices[i]] = full.matrix[j,i]
+            end
+        end
+    end
+    for comp in hmat.matrixviews
+        fullmat = comp.leftmatrix*comp.rightmatrix
+        for i = 1:length(comp.leftindices)
+            for j = 1:length(comp.rightindices)
+                fullhmat[comp.leftindices[i],comp.rightindices[j]] = fullmat[i,j]
+            end
+        end
+    end
+    return fullhmat
+end

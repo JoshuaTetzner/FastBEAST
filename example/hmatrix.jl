@@ -151,9 +151,9 @@ v2 = rand(NT)
 )
 @printf("Compression rate: %.2f %%\n", compressionrate(hmat)*100)
 
-stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=100))
-ttree = create_tree(tpoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=100))
-kmat = assembler(logkernel, tpoints, spoints)
+stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=20))
+ttree = create_tree(tpoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=20))
+@time kmat = assembler(logkernel, tpoints, spoints)
 @time hmat = HMatrix(logkernelassembler, ttree, stree, T=Float64)
 
 @printf("Accuracy test: %.2e\n", estimate_reldifference(hmat, kmat))
@@ -164,104 +164,4 @@ v2 = rand(NT)
     norm(adjoint(hmat)*v2 - adjoint(kmat)*v2)/norm(adjoint(kmat)*v2)
 )
 @printf("Compression rate: %.2f %%\n", compressionrate(hmat)*100)
-##
-N =  20000
-NT = 1000
 
-spoints = [@SVector rand(2) for i = 1:N]
-tpoints = 0.1*[@SVector rand(2) for i = 1:NT] + [SVector(1.0, 1.0) for i = 1:NT]
-tpoints = [tpoints[1], tpoints[90], tpoints[199]]
-##
-
-
-logkernelassembler(matrix, tdata, sdata) = assembler(
-    logkernel,
-    matrix,
-    tpoints[tdata],
-    spoints[sdata]
-)
-
-ttree = create_tree(tpoints, BoxTreeOptions(nmin=5))
-stree = create_tree(spoints, BoxTreeOptions(nmin=5))
-kmat = assembler(logkernel, tpoints, spoints)
-@time hmat = HMatrix(logkernelassembler, ttree, stree, T=Float64)
-
-#@printf("Accuracy test: %.2e\n", estimate_reldifference(hmat, kmat))
-
-#v2 = rand(NT)
-#@printf(
-#    "Accuracy test: %.2e\n",
-#    norm(adjoint(hmat)*v2 - adjoint(kmat)*v2)/norm(adjoint(kmat)*v2)
-#)
-#@printf("Compression rate: %.2f %%\n", compressionrate(hmat)*100)
-
-stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=100))
-ttree = create_tree(tpoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=100))
-kmat = assembler(logkernel, tpoints, spoints)
-@time hmat = HMatrix(logkernelassembler, ttree, stree, T=Float64)
-
-#@printf("Accuracy test: %.2e\n", estimate_reldifference(hmat, kmat))
-
-#v2 = rand(NT)
-#@printf(
-#    "Accuracy test: %.2e\n", 
-#    norm(adjoint(hmat)*v2 - adjoint(kmat)*v2)/norm(adjoint(kmat)*v2)
-#)
-#@printf("Compression rate: %.2f %%\n", compressionrate(hmat)*100)
-
-
-##
-a = zeros(20000)
-a[1] = 10
-a[90] = 3
-a[199] = 5
-
-##
-function sparsvectormul(
-    hmat::HMatrix,
-    vector::Vector
-)
-    function nonzeroelements(vector::Vector)
-        nnzelements = []
-        nnzvalues = []
-        for i = 1:length(vector)
-            if vector[i] != 0
-                push!(nnzelements,i)
-                push!(nnzvalues,vector[i]) 
-            end
-        end
-
-        return nnzelements
-    end
-    
-    function hmatvalues(hmat::HMatrix, nnzelements)
-        fullmat = []
-        for i = 1:length(hmat.fullmatrixviews)
-            for nnzelement in nnzelements
-                if nnzelement in hmat.fullmatrixviews[i].rightindices
-                    push!(fullmat, i)
-                    break
-                end
-            end
-        end
-
-        sparsmat = []
-        for i = 1:length(hmat.matrixviews)
-            for nnzelement in nnzelements
-                if nnzelement in hmat.matrixviews[i].rightindices
-                    push!(sparsmat, i)
-                    break
-                end
-            end
-        end
-        println(fullmat)
-        println(sparsmat)
-
-        return fullmat, sparsmat
-    end
-    hmatvalues(hmat,nonzeroelements(vector))
-    return
-end
-##
-@time sparsvectormul(hmat, a);
-@time kmat*a;

@@ -7,6 +7,7 @@ include("skeletons.jl")
 include("utils.jl")
 include("hmatrix.jl")
 include("beast.jl")
+include("sparsevectormul.jl")
 
 export BoundingBox
 export getboxframe
@@ -32,4 +33,7 @@ export nnz
 export compressionrate
 
 export hassemble
+
+export sparsevectormul
+export sparsevectormul2
 end
