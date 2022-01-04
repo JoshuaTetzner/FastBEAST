@@ -29,6 +29,7 @@ export buildhmatrix
 export adjoint
 export estimate_norm
 export estimate_reldifference
+export getfullmatrix
 export nnz
 export compressionrate
 

@@ -125,7 +125,7 @@ spoints = [SVector((sin(i)*cos(j),sin(i)*sin(j),i^2*cos(i))) for j=0:0.1:2*pi fo
 
 ##
 @views OneoverRkernelassembler(matrix, tdata, sdata) = assembler(OneoverRkernel, matrix, spoints[tdata], spoints[sdata])
-stree = create_tree(spoints, BoxTreeOptions(nmin=400))
+stree = create_tree(spoints, BoxTreeOptions(nmin=50))
 kmat = assembler(OneoverRkernel, spoints, spoints)
 @time hmat = HMatrix(OneoverRkernelassembler, stree, stree, compressor=:aca, T=Float64)
 
@@ -138,6 +138,9 @@ kmat = assembler(OneoverRkernel, spoints, spoints)
 
 @printf("Accuracy test: %.2e\n", estimate_reldifference(hmat,kmat))
 @printf("Compression rate: %.2f %%\n", compressionrate(hmat)*100)
+
+fullmat = getfullmatrix(hmat, length(spoints), length(spoints))
+@printf("Accuracy test (fullhmat): %.2e\n", norm(fullmat-kmat)/norm(kmat))
 
 ## Plot of first level KMeans clustering 
 scatter(
