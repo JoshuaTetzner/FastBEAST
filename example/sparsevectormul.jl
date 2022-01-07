@@ -37,10 +37,27 @@ function assembler(kernel, matrix, testpoints, sourcepoints)
         end
     end
 end
-
 ##
-N =  5000
-NT = 1000
+N = 200
+spoints = [@SVector rand(2) for i = 1:N]
+sparsevector = Array(sprand(Float64,N,0.001))
+
+logkernelassembler(matrix, tdata, sdata) = assembler(
+    logkernel, 
+    matrix, 
+    spoints[tdata], 
+    spoints[sdata]
+)
+
+stree = create_tree(spoints, BoxTreeOptions(nmin=10))
+@time kmat = assembler(logkernel, spoints, spoints)
+@time hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
+
+shmat = colstomv(hmat)
+@time solution = sparsevectormul(shmat, sparsevector)
+##
+N =  100000
+NT = 50000
 sparsevector = Array(sprand(Float64,N,0.001))
 
 spoints = [@SVector rand(2) for i = 1:N]
@@ -53,48 +70,12 @@ logkernelassembler(matrix, tdata, sdata) = assembler(
     spoints[sdata]
 )
 
-stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=100))
-ttree = create_tree(tpoints, KMeansTreeOptions(iterations=100, nchildren=2, nmin=100))
-@printf("kmat assembly time: \n")
-@time kmat = assembler(logkernel, tpoints, spoints)
-@printf("kmat sparsmultiplication time: \n")
-@time solution_true = kmat*sparsevector;
-
-@printf("hmat assembly time: \n")
-@time hmat = HMatrix(logkernelassembler, ttree, stree, T=Float64)
-@printf("hmat sparsmultiplication time: \n")
-@time solution = sparsevectormul(hmat,sparsevector)
-
-@printf("\n Accuracy test (hmat): %.2e\n", estimate_reldifference(hmat, kmat))
-@printf("\n Compression rate (hmat): %.2f %%\n", compressionrate(hmat)*100)
-
-@printf("Accuracy of sparsevectormul:  %.2e\n", norm(solution_true-solution)/norm(solution_true))
-
+stree = create_tree(spoints, BoxTreeOptions(nmin=100))
+ttree = create_tree(tpoints, BoxTreeOptions(nmin=100))
+hmat = HMatrix(logkernelassembler, ttree, stree, T=Float64);
+kmat = assembler(logkernel, tpoints, spoints);
 ##
-
-N = 200
-spoints = [@SVector rand(2) for i = 1:N]
-sparsevector = Array(sprand(Float64,N,0.001))
-
-logkernelassembler(matrix, tdata, sdata) = assembler(
-    logkernel, 
-    matrix, 
-    spoints[tdata], 
-    spoints[sdata]
-)
-
-stree = create_tree(spoints, BoxTreeOptions(nmin=200))
-@printf("kmat assembly time: \n")
-@time kmat = assembler(logkernel, spoints, spoints)
-@printf("kmat sparsmultiplication time: \n")
-@time solution_true = kmat*sparsevector;
-
-@printf("hmat assembly time: \n")
-@time hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
-@printf("hmat sparsmultiplication time: \n")
-@time solution = sparsevectormul(hmat,sparsevector)
-
-@printf("\n Accuracy test (hmat): %.2e\n", estimate_reldifference(hmat, kmat))
-@printf("\n Compression rate (hmat): %.2f %%\n", compressionrate(hmat)*100)
-
-@printf("Accuracy of sparsevectormul:  %.2e\n", norm(solution_true-solution))
+shmat = colstomv(hmat)
+@time solution = sparsevectormul(shmat, sparsevector)
+@time truesol = kmat*sparsevector
+print(norm(solution-truesol)/norm(truesol))
