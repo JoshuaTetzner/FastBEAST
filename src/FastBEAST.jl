@@ -37,4 +37,6 @@ export hassemble
 
 export sparsevectormul
 export colstomv
+export sparsevectormul2
+export colstomv2
 end

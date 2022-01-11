@@ -56,9 +56,9 @@ stree = create_tree(spoints, BoxTreeOptions(nmin=10))
 shmat = colstomv(hmat)
 @time solution = sparsevectormul(shmat, sparsevector)
 ##
-N =  100000
-NT = 50000
-sparsevector = Array(sprand(Float64,N,0.001))
+N =  20000
+NT = 10000
+sparsevector = Array(sprand(Float64,N,0.01))
 
 spoints = [@SVector rand(2) for i = 1:N]
 tpoints = 0.1*[@SVector rand(2) for i = 1:NT] + [SVector(1.0, 1.0) for i = 1:NT]
@@ -70,12 +70,13 @@ logkernelassembler(matrix, tdata, sdata) = assembler(
     spoints[sdata]
 )
 
-stree = create_tree(spoints, BoxTreeOptions(nmin=100))
-ttree = create_tree(tpoints, BoxTreeOptions(nmin=100))
+stree = create_tree(spoints, KMeansTreeOptions(iterations = 100, nmin=100))
+ttree = create_tree(tpoints, KMeansTreeOptions(iterations = 100, nmin=100))
 hmat = HMatrix(logkernelassembler, ttree, stree, T=Float64);
 kmat = assembler(logkernel, tpoints, spoints);
 ##
-shmat = colstomv(hmat)
+sparsevector = Array(sprand(Float64,N,0.001))
+@time shmat = colstomv(hmat)
 @time solution = sparsevectormul(shmat, sparsevector)
 @time truesol = kmat*sparsevector
 print(norm(solution-truesol)/norm(truesol))

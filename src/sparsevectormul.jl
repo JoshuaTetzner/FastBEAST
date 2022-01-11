@@ -7,27 +7,44 @@ struct SparseHMatrix{T,I}
 end
 
 function colstomv(hmat::HMatrix)
-    colstofmv = zeros(Int, size(hmat)[1], size(hmat)[2])
-    colstolmv = zeros(Int, size(hmat)[1], size(hmat)[2])
+    colstofmv = zeros(Int, 100, size(hmat)[2])
+    colstolmv = zeros(Int, 100, size(hmat)[2])
     ncolstofmv = zeros(Int, size(hmat)[2])
     ncolstolmv = zeros(Int, size(hmat)[2])
 
     for (fmvindex, fmv) in enumerate(hmat.fullmatrixviews)
         for colindex in fmv.rightindices
-            colstofmv[ncolstofmv[colindex]+1, colindex]=fmvindex
-            ncolstofmv[colindex] += 1
+            if ncolstofmv == size(colstofmv)[1]
+                colstofmvnew = zeros(Int, size(colstofmv)[1]+100, size(colstofmv)[2])
+                colstofmvnew[1:size(colstofmv)[1], :] = colstofmv
+                colstofmv = colstofmvnew
+                colstofmv[ncolstofmv[colindex]+1, colindex]=fmvindex
+                ncolstofmv[colindex] += 1
+            else
+                colstofmv[ncolstofmv[colindex]+1, colindex]=fmvindex
+                ncolstofmv[colindex] += 1
+            end
         end
     end
     
     for (lmvindex, lmv) in enumerate(hmat.matrixviews)
         for colindex in lmv.rightindices
-            colstolmv[ncolstolmv[colindex]+1, colindex]=lmvindex
-            ncolstolmv[colindex] += 1
+            if ncolstolmv == size(colstolmv)[1]
+                colstolmvnew = zeros(Int, size(colstolmv)[1]+100, size(colstolmv)[2])
+                colstolmvnew[1:size(colstolmv)[1], :] = colstolmv
+                colstolmv = colstolmvnew
+                colstolmv[ncolstolmv[colindex]+1, colindex]=lmvindex
+                ncolstolmv[colindex] += 1
+            else
+                colstolmv[ncolstolmv[colindex]+1, colindex]=lmvindex
+                ncolstolmv[colindex] += 1
+            end
         end
     end
 
     return SparseHMatrix(hmat, colstofmv, colstolmv, ncolstofmv, ncolstolmv)
 end
+
 
 function sparsevectormul(
     shmat::SparseHMatrix,
@@ -48,7 +65,7 @@ function sparsevectormul(
         return nnzelements, nnzvalues
     end
 
-   @time nnzelements, nnzvalues = nonzeroelements(vector)
+   nnzelements, nnzvalues = nonzeroelements(vector)
 
     for indexnnzelement = 1:length(nnzelements)
         for j = 1:shmat.ncolstofmv[nnzelements[indexnnzelement]]
