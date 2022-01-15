@@ -49,7 +49,7 @@ logkernelassembler(matrix, tdata, sdata) = assembler(
     spoints[sdata]
 )
 
-stree = create_tree(spoints, BoxTreeOptions(nmin=10))
+stree = create_tree(spoints, BoxTreeOptions(nmin=200))
 @time kmat = assembler(logkernel, spoints, spoints)
 @time hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
 
@@ -70,13 +70,13 @@ logkernelassembler(matrix, tdata, sdata) = assembler(
     spoints[sdata]
 )
 
-stree = create_tree(spoints, KMeansTreeOptions(iterations = 100, nmin=100))
-ttree = create_tree(tpoints, KMeansTreeOptions(iterations = 100, nmin=100))
-hmat = HMatrix(logkernelassembler, ttree, stree, T=Float64);
-kmat = assembler(logkernel, tpoints, spoints);
-##
-sparsevector = Array(sprand(Float64,N,0.001))
-@time shmat = colstomv(hmat)
-@time solution = sparsevectormul(shmat, sparsevector)
-@time truesol = kmat*sparsevector
+stree = create_tree(spoints, KMeansTreeOptions(iterations = 100, nmin=50))
+ttree = create_tree(tpoints, KMeansTreeOptions(iterations = 100, nmin=50))
+
+sparsevector = sprand(Float64,N,0.01)
+@time solution = sparsevectormul(
+    colstomv(HMatrix(logkernelassembler, ttree, stree, T=Float64)),
+    sparsevector
+)
+@time truesol = assembler(logkernel, tpoints, spoints)*sparsevector
 print(norm(solution-truesol)/norm(truesol))

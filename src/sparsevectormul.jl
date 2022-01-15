@@ -1,3 +1,5 @@
+using SparseArrays
+
 struct SparseHMatrix{T,I}
     hmat::HMatrix{T,I}
     colstofmv
@@ -48,50 +50,35 @@ end
 
 function sparsevectormul(
     shmat::SparseHMatrix,
-    vector::Vector
+    vector::SparseVector
 )
     solution = zeros(size(shmat.hmat)[1])
 
-    function nonzeroelements(vector::Vector)
-        nnzelements = Int64[]
-        nnzvalues = Float64[]
-        for i = 1:length(vector)
-            if vector[i] != 0
-                push!(nnzelements, i)
-                push!(nnzvalues, vector[i]) 
-            end
-        end
-
-        return nnzelements, nnzvalues
-    end
-
-   nnzelements, nnzvalues = nonzeroelements(vector)
-
-    for indexnnzelement = 1:length(nnzelements)
-        for j = 1:shmat.ncolstofmv[nnzelements[indexnnzelement]]
-            for fmvindex in shmat.colstofmv[j,nnzelements[indexnnzelement]]
+    for (nnzelement, nnzvalue) in zip(vector.nzind, vector.nzval)
+        for j = 1:shmat.ncolstofmv[nnzelement]
+            for fmvindex in shmat.colstofmv[j,nnzelement]
                 colindex = findfirst(
-                    isequal(nnzelements[indexnnzelement]),
+                    isequal(nnzelement),
                     shmat.hmat.fullmatrixviews[fmvindex].rightindices
                 )
                 @views solution[shmat.hmat.fullmatrixviews[fmvindex].leftindices] += 
                     shmat.hmat.fullmatrixviews[fmvindex].matrix[:,colindex]*
-                    nnzvalues[indexnnzelement]
+                    nnzvalue
             end
         end 
     end
 
-    for indexnnzelement = 1:length(nnzelements)
-        for j = 1:shmat.ncolstolmv[nnzelements[indexnnzelement]]
-            for lmvindex in shmat.colstolmv[j,nnzelements[indexnnzelement]]
+    for (nnzelement, nnzvalue) in zip(vector.nzind, vector.nzval)
+        for j = 1:shmat.ncolstolmv[nnzelement]
+            for lmvindex in shmat.colstolmv[j,nnzelement]
                 colindex = findfirst(
-                    isequal(nnzelements[indexnnzelement]),
+                    isequal(nnzelement),
                     shmat.hmat.matrixviews[lmvindex].rightindices
                 )
                 @views solution[shmat.hmat.matrixviews[lmvindex].leftindices] += 
                     shmat.hmat.matrixviews[lmvindex].leftmatrix*
                     shmat.hmat.matrixviews[lmvindex].rightmatrix[:,colindex]*
-                    nnzvalues[indexnnzelement]
+                    nnzvalue
             end
         end 
     end
