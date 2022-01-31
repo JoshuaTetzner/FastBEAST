@@ -4,6 +4,7 @@ using Printf
 using LinearAlgebra
 using StaticArrays
 using SparseArrays
+using BenchmarkTools
 
 ##
 function logkernel(testpoint::SVector{2,T}, sourcepoint::SVector{2,T}) where T
@@ -40,7 +41,7 @@ end
 ##
 N = 200
 spoints = [@SVector rand(2) for i = 1:N]
-sparsevector = Array(sprand(Float64,N,0.001))
+sparsevector = sprand(Float64,N,0.001)
 
 logkernelassembler(matrix, tdata, sdata) = assembler(
     logkernel, 
@@ -55,9 +56,11 @@ stree = create_tree(spoints, BoxTreeOptions(nmin=200))
 
 shmat = colstomv(hmat)
 @time solution = sparsevectormul(shmat, sparsevector)
+
+
 ##
-N =  20000
-NT = 10000
+N =  10000
+NT = 5000
 sparsevector = Array(sprand(Float64,N,0.01))
 
 spoints = [@SVector rand(2) for i = 1:N]
@@ -70,13 +73,84 @@ logkernelassembler(matrix, tdata, sdata) = assembler(
     spoints[sdata]
 )
 
-stree = create_tree(spoints, KMeansTreeOptions(iterations = 100, nmin=50))
-ttree = create_tree(tpoints, KMeansTreeOptions(iterations = 100, nmin=50))
+stree = create_tree(spoints, KMeansTreeOptions(iterations = 100, nmin=50000))
+ttree = create_tree(tpoints, KMeansTreeOptions(iterations = 100, nmin=50000))
 
 sparsevector = sprand(Float64,N,0.01)
-@time solution = sparsevectormul(
+@time solution = sparsevectormul2(
     colstomv(HMatrix(logkernelassembler, ttree, stree, T=Float64)),
     sparsevector
 )
 @time truesol = assembler(logkernel, tpoints, spoints)*sparsevector
-print(norm(solution-truesol)/norm(truesol))
+println(norm(solution-truesol)/norm(truesol))
+
+##
+N = 1000;
+spoints = [@SVector rand(2) for i = 1:N];
+sparsevector = sprand(Float64,N,0.001);
+kmat = assembler(logkernel, spoints, spoints);
+##
+logkernelassembler(matrix, tdata, sdata) = assembler(
+    logkernel, 
+    matrix, 
+    spoints[tdata], 
+    spoints[sdata]
+)
+
+stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nmin=10))
+hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
+
+shmat = colstomv(hmat)
+@btime solution = sparsevectormul(shmat, sparsevector)
+@btime solution = sparsevectormul2(shmat, s[1,:])
+truesol = kmat*sparsevector
+
+
+
+##
+function sp3(
+    shmat,
+    smat
+)
+    for i = 1:length(smat[1,:])
+        sparsevectormul3(shmat, smat[i,:])
+    end
+end
+
+function sp2(
+    shmat,
+    smat
+)
+    fullvec = zeros(Float64, length(smat[1,:]))
+    for i = 1:length(smat[1,:])
+        sparsevectormul2(shmat, smat[i,:], fullvec)
+    end
+end
+
+function sp(
+    shmat,
+    smat
+)
+    for i = 1:length(smat[1,:])
+        sparsevectormul(shmat, smat[i,:])
+    end
+end
+
+N = 2000;
+spoints = [@SVector rand(2) for i = 1:N];
+smat = sprand(Float64,N, N,0.01);
+
+logkernelassembler(matrix, tdata, sdata) = assembler(
+    logkernel, 
+    matrix, 
+    spoints[tdata], 
+    spoints[sdata]
+)
+
+stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nmin=10))
+hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
+shmat = colstomv(hmat)
+##
+@btime sp(shmat, smat)
+@btime sp2(shmat, smat)
+@btime sp3(shmat, smat)
