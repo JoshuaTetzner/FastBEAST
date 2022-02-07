@@ -112,7 +112,7 @@ function sp3(
     shmat,
     smat
 )
-    for i = 1:length(smat[1,:])
+    for i = 1:length(smat[:,1])
         sparsevectormul3(shmat, smat[i,:])
     end
 end
@@ -122,7 +122,7 @@ function sp2(
     smat
 )
     fullvec = zeros(Float64, length(smat[1,:]))
-    for i = 1:length(smat[1,:])
+    for i = 1:length(smat[:,1])
         sparsevectormul2(shmat, smat[i,:], fullvec)
     end
 end
@@ -131,14 +131,14 @@ function sp(
     shmat,
     smat
 )
-    for i = 1:length(smat[1,:])
+    for i = 1:length(smat[:,1])
         sparsevectormul(shmat, smat[i,:])
     end
 end
 
-N = 2000;
+N = 10000;
 spoints = [@SVector rand(2) for i = 1:N];
-smat = sprand(Float64,N, N,0.01);
+smat = sprand(Float64,100, N,0.01);
 
 logkernelassembler(matrix, tdata, sdata) = assembler(
     logkernel, 
@@ -151,6 +151,6 @@ stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nmin=10))
 hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
 shmat = colstomv(hmat)
 ##
-@btime sp(shmat, smat)
-@btime sp2(shmat, smat)
-@btime sp3(shmat, smat)
+@time sp(shmat, smat)
+@time sp2(shmat, smat)
+@time sp3(shmat, smat)
