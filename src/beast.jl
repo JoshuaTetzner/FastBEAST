@@ -8,11 +8,11 @@ function hassemble(
     compressor=:aca,
     tol=1e-4,
     treeoptions=BoxTreeOptions(nmin=100),
-    maxrank=100,
+    maxrank=200,
     threading=:single,
     quadstrat=BEAST.defaultquadstrat(operator, test_functions, trial_functions),
     verbose=false,
-    svdrecompress=true
+    svdrecompress=false
 )
 
     @views blkasm = BEAST.blockassembler(operator, test_functions, trial_functions)
@@ -41,9 +41,10 @@ function hassemble(
     @time hmat = HMatrix(
         assembler,
         test_tree,
-        trial_tree, 
+        trial_tree,
+        Int64,
+        scalartype(operator),
         compressor=compressor,
-        T=scalartype(operator),
         tol=tol,
         maxrank=maxrank,
         threading=threading,
@@ -53,6 +54,7 @@ function hassemble(
     )
     return hmat
 end
+
 
 # The following to function ensure that no dynamic dispatching is
 # performed since we know already that all triangles are well-separate
