@@ -204,3 +204,20 @@ function sparsevectormul2(
     
     return solution
 end
+
+function hmatmatrixmul(
+    hmat::HMatrix,
+    smat::SparseMatrixCSC
+)
+    solution = zeros(size(hmat)[1],size(smat)[2])
+
+    for frb in hmat.fullrankblocks
+        solution[frb.τ, :] += frb.M * smat[frb.σ, :] 
+    end
+
+    for lrb in hmat.lowrankblocks
+        solution[lrb.τ, :] += lrb.M.U * (lrb.M.V * smat[lrb.σ, :])
+    end
+
+    return solution
+end

@@ -39,10 +39,12 @@ function assembler(kernel, matrix, testpoints, sourcepoints)
     end
 end
 ##
-N = 200
+N = 2000
 spoints = [@SVector rand(2) for i = 1:N]
 sparsevector = sprand(Float64,N,0.001)
+smat = sprand(Float64,N, N,0.01);
 
+##
 logkernelassembler(matrix, tdata, sdata) = assembler(
     logkernel, 
     matrix, 
@@ -50,12 +52,22 @@ logkernelassembler(matrix, tdata, sdata) = assembler(
     spoints[sdata]
 )
 
-stree = create_tree(spoints, BoxTreeOptions(nmin=200))
+stree = create_tree(spoints, BoxTreeOptions(nmin=20))
 @time kmat = assembler(logkernel, spoints, spoints)
-@time hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
+@time hmat = HMatrix(logkernelassembler, stree, stree, Int64, Float64)
 
-shmat = colstomv(hmat)
-@time solution = sparsevectormul(shmat, sparsevector)
+#testblock = hmat.lowrankblocks[1].M.U*hmat.lowrankblocks[1].M.V
+#truetestblock = kmat[hmat.lowrankblocks[1].τ, hmat.lowrankblocks[1].σ]
+#println(norm(testblock-truetestblock))
+
+fullhmat = getfullmatrix(hmat, N, N)
+#norm(kmat-fullhmat)/norm(kmat)
+##
+@time sol = hmatmatrixmul(hmat, smat);
+@time truesol = fullhmat*smat;
+##
+#shmat = colstomv(hmat)
+#@time solution = sparsevectormul(shmat, sparsevector)
 
 
 ##

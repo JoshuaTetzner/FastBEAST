@@ -40,5 +40,6 @@ export sparsevectormul
 export colstomv
 export sparsevectormul2
 export sparsevectormul3
+export hmatmatrixmul
 export colstomv2
 end
