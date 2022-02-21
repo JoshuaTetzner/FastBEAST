@@ -36,10 +36,8 @@ export compressionrate
 
 export hassemble
 
-export sparsevectormul
 export colstomv
+export sparsevectormul
 export sparsevectormul2
-export sparsevectormul3
 export hmatmatrixmul
-export colstomv2
 end

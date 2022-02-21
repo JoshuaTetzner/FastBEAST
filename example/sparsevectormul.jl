@@ -56,18 +56,10 @@ stree = create_tree(spoints, BoxTreeOptions(nmin=20))
 @time kmat = assembler(logkernel, spoints, spoints)
 @time hmat = HMatrix(logkernelassembler, stree, stree, Int64, Float64)
 
-#testblock = hmat.lowrankblocks[1].M.U*hmat.lowrankblocks[1].M.V
-#truetestblock = kmat[hmat.lowrankblocks[1].τ, hmat.lowrankblocks[1].σ]
-#println(norm(testblock-truetestblock))
-
 fullhmat = getfullmatrix(hmat, N, N)
-#norm(kmat-fullhmat)/norm(kmat)
-##
+
 @time sol = hmatmatrixmul(hmat, smat);
 @time truesol = fullhmat*smat;
-##
-#shmat = colstomv(hmat)
-#@time solution = sparsevectormul(shmat, sparsevector)
 
 
 ##
@@ -117,15 +109,14 @@ shmat = colstomv(hmat)
 @btime solution = sparsevectormul2(shmat, s[1,:])
 truesol = kmat*sparsevector
 
-
-
 ##
-function sp3(
+function sp(
     shmat,
     smat
 )
+    sol = zeros(size(shmat.hmat)[1], size(shmat.hmat)[1])
     for i = 1:length(smat[:,1])
-        sparsevectormul3(shmat, smat[i,:])
+        sol[i,:] = sparsevectormul(shmat, smat[i,:])
     end
 end
 
@@ -133,24 +124,16 @@ function sp2(
     shmat,
     smat
 )
-    fullvec = zeros(Float64, length(smat[1,:]))
+    sol = zeros(size(shmat.hmat)[1], size(shmat.hmat)[1])
     for i = 1:length(smat[:,1])
-        sparsevectormul2(shmat, smat[i,:], fullvec)
+        sol[i,:] = sparsevectormul2(shmat, smat[i,:])
     end
 end
 
-function sp(
-    shmat,
-    smat
-)
-    for i = 1:length(smat[:,1])
-        sparsevectormul(shmat, smat[i,:])
-    end
-end
-
-N = 10000;
+##
+N = 1000;
 spoints = [@SVector rand(2) for i = 1:N];
-smat = sprand(Float64,100, N,0.01);
+smat = sprand(Float64,N, N,0.1);
 
 logkernelassembler(matrix, tdata, sdata) = assembler(
     logkernel, 
@@ -160,9 +143,9 @@ logkernelassembler(matrix, tdata, sdata) = assembler(
 )
 
 stree = create_tree(spoints, KMeansTreeOptions(iterations=100, nmin=10))
-hmat = HMatrix(logkernelassembler, stree, stree, T=Float64)
+hmat = HMatrix(logkernelassembler, stree, stree, Int64, Float64)
 shmat = colstomv(hmat)
 ##
 @time sp(shmat, smat)
 @time sp2(shmat, smat)
-@time sp3(shmat, smat)
+@time sol = hmatmatrixmul(hmat, smat);
