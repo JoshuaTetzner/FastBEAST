@@ -1,4 +1,3 @@
-
 using BEAST
 
 function hassemble(
@@ -38,11 +37,56 @@ function hassemble(
     test_tree = create_tree(test_functions.pos, treeoptions=BoxTreeOptions(nmin=nmin))
     trial_tree = create_tree(trial_functions.pos, treeoptions=BoxTreeOptions(nmin=nmin))
 
-    @time hmat = HMatrix(assembler, test_tree, trial_tree, 
-                         compressor=compressor, T=scalartype(operator), tol=tol, maxrank=maxrank,
-                         threading=threading, farmatrixassembler=farassembler, verbose=verbose,
-                         svdrecompress=svdrecompress)
+    @time hmat = HMatrix(
+        assembler,
+        test_tree,
+        trial_tree, 
+        compressor=compressor,
+        T=scalartype(operator),
+        tol=tol,
+        maxrank=maxrank,
+        threading=threading,
+        farmatrixassembler=farassembler,
+        verbose=verbose,
+        svdrecompress=svdrecompress
+    )
+
     return hmat
+end
+
+function fmmassemble(
+    operator::BEAST.AbstractOperator,
+    test_functions::BEAST.LagrangeBasis,
+    trial_functions::BEAST.LagrangeBasis;
+    nmin=5,
+    threading=:single,
+    npoints=3,
+    fmmncrit=200,
+    fmmp=10
+)
+    fullrankblocks, correctionblocks, _ = getfullrankblocks(
+        operator,
+        test_functions,
+        trial_functions,
+        nmin=nmin,
+        threading=threading,
+        quadstratcbk=SafeDoubleNumQStrat(npoints, npoints)
+    )
+    
+    fullmat  = fullmatrix(fullrankblocks)
+    BtCB = fullmatrix(correctionblocks)
+    
+    points, qp = meshtopoints(test_functions, npoints)
+    B = getBmatrix(qp, test_functions);
+    fmm = assemble_hfmm(
+        points,
+        points,
+        p=fmmp,
+        wavek=imag(operator.gamma),
+        ncrit=fmmncrit
+    )
+
+    return B, fmm, BtCB, fullmat 
 end
 
 # The following to function ensure that no dynamic dispatching is
@@ -61,6 +105,76 @@ function BEAST.quadrule(op, tref, bref,
     i ,τ, j, σ, qd, qs::BEAST.DoubleNumQStrat)
 
     return BEAST.DoubleQuadRule(
-        qd.tpoints[1,i],
-        qd.bpoints[1,j])
+        qd.test_qp[1,i],
+        qd.bsis_qp[1,j])
 end
+
+
+# Safe evaluation of Greens function
+struct SafeDoubleNumQStrat{R}
+    outer_rule::R
+    inner_rule::R
+end
+
+struct SafeDoubleQuadRule{P,Q}
+    outer_quad_points::P
+    inner_quad_points::Q
+end
+
+function BEAST.quadrule(op, tref, bref, i ,τ, j, σ, qd, qs::SafeDoubleNumQStrat)
+
+    return SafeDoubleQuadRule(
+        qd.test_qp[1,i],
+        qd.bsis_qp[1,j])
+end
+
+function BEAST.quaddata(
+    op::BEAST.Helmholtz3DOp,
+    test_refspace::BEAST.LagrangeRefSpace,
+    trial_refspace::BEAST.LagrangeRefSpace,
+    test_elements,
+    trial_elements,
+    qs::SafeDoubleNumQStrat
+)
+
+    test_eval(x)  = test_refspace(x,  Val{:withcurl})
+    trial_eval(x) = trial_refspace(x, Val{:withcurl})
+
+    test_qp = BEAST.quadpoints(test_eval,  test_elements,  (qs.outer_rule,))
+    bsis_qp = BEAST.quadpoints(trial_eval, trial_elements, (qs.inner_rule,))
+
+    return (;test_qp, bsis_qp)
+end
+
+function BEAST.momintegrals!(biop, tshs, bshs, tcell, bcell, z, strat::SafeDoubleQuadRule)
+    
+    igd = BEAST.Integrand(biop, tshs, bshs, tcell, bcell)
+    womps = strat.outer_quad_points
+    wimps = strat.inner_quad_points
+    
+    for womp in womps
+        tgeo = womp.point
+        tvals = womp.value
+        M = length(tvals)
+        jx = womp.weight
+        
+        for wimp in wimps
+            bgeo = wimp.point
+            bvals = wimp.value
+            N = length(bvals)
+            jy = wimp.weight
+
+            j = jx * jy
+
+            if !(bgeo.cart ≈ tgeo.cart)
+                z1 = j * igd(tgeo, bgeo, tvals, bvals)
+                for n in 1:N
+                    for m in 1:M
+                        z[m,n] += z1[m,n]
+            end end end
+        end
+    end
+
+    return z
+end
+
