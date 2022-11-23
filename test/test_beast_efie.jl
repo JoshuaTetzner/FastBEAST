@@ -1,3 +1,5 @@
+using Test
+using FastBEAST
 using CompScienceMeshes
 using BEAST
 using StaticArrays
@@ -45,11 +47,11 @@ T = hassemble(
     𝓣,
     X,
     X,
-    nmin=100,
-    threading=:multi,
-    quadstrat=BEAST.DoubleNumQStrat(1,1),
+    treeoptions=KMeansTreeOptions(nmin=30),
+    threading=:single,
+    quadstrat=BEAST.DoubleNumQStrat(1, 1),
     verbose=true,
-    svdrecompress=true
+    svdrecompress=false
 )
 
 e = assemble(𝒆,X)

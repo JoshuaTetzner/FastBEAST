@@ -6,12 +6,12 @@ function hassemble(
     trial_functions;
     compressor=:aca,
     tol=1e-4,
-    nmin=100,
-    maxrank=100,
+    treeoptions=BoxTreeOptions(nmin=100),
+    maxrank=200,
     threading=:single,
     quadstrat=BEAST.defaultquadstrat(operator, test_functions, trial_functions),
     verbose=false,
-    svdrecompress=true
+    svdrecompress=false
 )
 
     @views blkasm = BEAST.blockassembler(operator, test_functions, trial_functions)
@@ -34,59 +34,14 @@ function hassemble(
     end
 
 
-    test_tree = create_tree(test_functions.pos, treeoptions=BoxTreeOptions(nmin=nmin))
-    trial_tree = create_tree(trial_functions.pos, treeoptions=BoxTreeOptions(nmin=nmin))
+    test_tree = create_tree(test_functions.pos, treeoptions)
+    trial_tree = create_tree(trial_functions.pos, treeoptions)
 
-    @time hmat = HMatrix(
-        assembler,
-        test_tree,
-        trial_tree, 
-        compressor=compressor,
-        T=scalartype(operator),
-        tol=tol,
-        maxrank=maxrank,
-        threading=threading,
-        farmatrixassembler=farassembler,
-        verbose=verbose,
-        svdrecompress=svdrecompress
-    )
-
+    @time hmat = HMatrix(assembler, test_tree, trial_tree, 
+                         compressor=compressor, T=scalartype(operator), tol=tol, maxrank=maxrank,
+                         threading=threading, farmatrixassembler=farassembler, verbose=verbose,
+                         svdrecompress=svdrecompress)
     return hmat
-end
-
-function fmmassemble(
-    operator::BEAST.AbstractOperator,
-    test_functions::BEAST.LagrangeBasis,
-    trial_functions::BEAST.LagrangeBasis;
-    nmin=5,
-    threading=:single,
-    npoints=3,
-    fmmncrit=200,
-    fmmp=10
-)
-    fullrankblocks, correctionblocks, _ = getfullrankblocks(
-        operator,
-        test_functions,
-        trial_functions,
-        nmin=nmin,
-        threading=threading,
-        quadstratcbk=SafeDoubleNumQStrat(npoints, npoints)
-    )
-    
-    fullmat  = fullmatrix(fullrankblocks)
-    BtCB = fullmatrix(correctionblocks)
-    
-    points, qp = meshtopoints(test_functions, npoints)
-    B = getBmatrix(qp, test_functions);
-    fmm = assemble_hfmm(
-        points,
-        points,
-        p=fmmp,
-        wavek=imag(operator.gamma),
-        ncrit=fmmncrit
-    )
-
-    return B, fmm, BtCB, fullmat 
 end
 
 # The following to function ensure that no dynamic dispatching is
@@ -145,36 +100,3 @@ function BEAST.quaddata(
 
     return (;test_qp, bsis_qp)
 end
-
-function BEAST.momintegrals!(biop, tshs, bshs, tcell, bcell, z, strat::SafeDoubleQuadRule)
-    
-    igd = BEAST.Integrand(biop, tshs, bshs, tcell, bcell)
-    womps = strat.outer_quad_points
-    wimps = strat.inner_quad_points
-    
-    for womp in womps
-        tgeo = womp.point
-        tvals = womp.value
-        M = length(tvals)
-        jx = womp.weight
-        
-        for wimp in wimps
-            bgeo = wimp.point
-            bvals = wimp.value
-            N = length(bvals)
-            jy = wimp.weight
-
-            j = jx * jy
-
-            if !(bgeo.cart ≈ tgeo.cart)
-                z1 = j * igd(tgeo, bgeo, tvals, bvals)
-                for n in 1:N
-                    for m in 1:M
-                        z[m,n] += z1[m,n]
-            end end end
-        end
-    end
-
-    return z
-end
-
