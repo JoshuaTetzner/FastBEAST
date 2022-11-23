@@ -1,6 +1,7 @@
 using BEAST
 using FastBEAST
 using StaticArrays
+using CompScienceMeshes
 using Test
 
 r = 10.0
@@ -14,7 +15,7 @@ S = Helmholtz3D.singlelayer(; gamma=im*k)
 # patch basis functions
 X0 = lagrangecxd0(refmesh)
 
-@time B, fmm, BtCB, fullmat = fmmassemble(
+fmat = fmmassemble(
     S,
     X0,
     X0,
@@ -25,20 +26,17 @@ X0 = lagrangecxd0(refmesh)
     fmmp=10
 );
 
-charges = ComplexF64.(rand(Float64, length(X0.fns)))
-GBx, ϵ = fmm(B*charges)
+x = ComplexF64.(rand(Float64, length(X0.fns)))
 
-Ax = transpose(B) * conj.(GBx[:,1])
+Ax = fmat * x
+Ax_true = assemble(S, X0, X0) * x
 
-A = Ax - BtCB*charges + fullmat * charges
-A_true = assemble(S, X0, X0) * charges
-
-@test norm(A-A_true) / norm(A_true) ≈ 0 atol=1e-4
+println(@test norm(Ax - Ax_true) / norm(Ax_true) ≈ 0 atol=1e-4)
 
 # pyramid basis functions
 X0 = lagrangec0d1(refmesh)
 
-@time B, fmm, BtCB, fullmat = fmmassemble(
+fmat = fmmassemble(
     S,
     X0,
     X0,
@@ -49,12 +47,10 @@ X0 = lagrangec0d1(refmesh)
     fmmp=10
 );
 
-charges = ComplexF64.(rand(Float64, length(X0.fns)))
-GBx, ϵ = fmm(B*charges)
+x = ComplexF64.(rand(Float64, length(X0.fns)))
 
-Ax = transpose(B) * conj.(GBx[:,1])
+Ax = fmat * x
+Ax_true = assemble(S, X0, X0) * x
 
-A = Ax - BtCB*charges + fullmat * charges
-A_true = assemble(S, X0, X0) * charges
+println(@test norm(Ax - Ax_true) / norm(Ax_true) ≈ 0 atol=1e-4)
 
-@test norm(A-A_true) / norm(A_true) ≈ 0 atol=1e-4
