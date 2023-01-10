@@ -58,10 +58,9 @@ X0 = lagrangecxd0(refmesh)
 S = Helmholtz3D.singlelayer(; gamma=im*k)
 points, qp = meshtopoints(X0, 1)
 
-
 charges = ComplexF64.(rand(Float64, length(X0.fns)))
 
-fmm = assemble_hfmm(points, points, p=10, ncrit=200, wavek=k)
+fmm = assemble_fmm(points, points, HelmholtzFMMOptions(imag(S.gamma)))
 B = getBmatrix(qp, X0)
 G = greensfct(qp, S, refmesh)
 
@@ -88,7 +87,7 @@ points, qp = meshtopoints(X0, 1)
 
 charges = ComplexF64.(rand(Float64, length(X0.fns)))
 
-fmm = assemble_hfmm(points, points, p=10, ncrit=200, wavek=k)
+fmm = assemble_fmm(points, points, HelmholtzFMMOptions(imag(S.gamma)))
 B = getBmatrix(qp, X0)
 G = greensfct(qp, S, refmesh)
 
@@ -108,7 +107,7 @@ points, qp = meshtopoints(X1, 1)
 
 charges = ComplexF64.(rand(Float64, length(X1.fns)))
 
-fmm = assemble_hfmm(points, points, p=10, ncrit=200, wavek=k)
+fmm = assemble_fmm(points, points, HelmholtzFMMOptions(imag(S.gamma)))
 B = getBmatrix(qp, X1)
 G = greensfct(qp, S, refmesh)
 
@@ -119,3 +118,10 @@ Ax = transpose(B) * conj.(GBx[:,1])
 Ax_true = transpose(B) * G * B * charges
 
 println(@test norm(Ax - Ax_true) ≈ 0 atol=1e-6)
+
+##
+p = [0 0 0; 1 1 1;2 2 2]
+charges = [1,1,1]
+
+fmm = assemble_fmm(p, p, LaplaceFMMOptions())
+fmm(charges)[1] 

@@ -1,5 +1,6 @@
 using PyCall
 helmholtz = pyimport("exafmm.helmholtz")
+laplace = pyimport("exafmm.laplace")
 using LinearAlgebra
 using LinearMaps
 using ProgressMeter
@@ -13,6 +14,31 @@ struct FMMMatrix{I, K} <: LinearMaps.LinearMap{K}
     fullmat::SparseMatrixCSC{K, I}
     rowdim::I
     columndim::I
+end
+
+abstract type FMMOptions end
+
+struct HelmholtzFMMOptions{I, F} <: FMMOptions
+    p::I
+    ncrit::I
+    wavek::F
+end
+
+struct LaplaceFMMOptions{I} <: FMMOptions
+    p::I
+    ncrit::I
+end
+
+function LaplaceFMMOptions()
+    return LaplaceFMMOptions(8, 100)
+end
+
+function HelmholtzFMMOptions(wavek::F) where F 
+    if isapprox(wavek, F(0))
+        return LaplaceFMMOptions()
+    else
+        return HelmholtzFMMOptions(8, 100, wavek)
+    end 
 end
 
 function Base.size(fmat::FMMMatrix, dim=nothing)
@@ -78,32 +104,88 @@ end
     return y
 end
 
-function assemble_hfmm(
-    spoints::Matrix{Float64},
-    tpoints::Matrix{Float64};
-    p=10,
-    ncrit=200,
-    wavek=10
-)
+function assemble_fmm(
+    spoints::Matrix{F},
+    tpoints::Matrix{F};
+    options=LaplaceFMMOptions() 
+) where F <: Real
+    
+    sources = laplace.init_sources(spoints, zeros(length(tpoints[:,1])))
+    targets = laplace.init_targets(tpoints)
+
+    fmm = laplace.LaplaceFmm(p=options.p, ncrit=options.ncrit, filename="test_file.dat")
+    tree = laplace.setup(sources, targets, fmm)
+    eval(charges) = eval_fmm(tree, fmm, charges, options)
+
+    return eval
+
+end
+
+function assemble_fmm(
+    spoints::Matrix{F},
+    tpoints::Matrix{F},
+    options::LaplaceFMMOptions{I} 
+) where {I, F <: Real}
+
+    println("HERE")
+
+    sources = laplace.init_sources(spoints, zeros(length(tpoints[:,1])))
+    targets = laplace.init_targets(tpoints)
+
+    fmm = laplace.LaplaceFmm(p=options.p, ncrit=options.ncrit, filename="test_file.dat")
+    tree = laplace.setup(sources, targets, fmm)
+    eval(charges) = eval_fmm(tree, fmm, charges, options)
+
+    return eval
+
+end
+
+function assemble_fmm(
+    spoints::Matrix{F},
+    tpoints::Matrix{F},
+    options::HelmholtzFMMOptions{I, F} 
+) where {I, F <: Real}
+
     sources = helmholtz.init_sources(spoints, zeros(length(tpoints[:,1])))
     targets = helmholtz.init_targets(tpoints)
 
-    fmm = helmholtz.HelmholtzFmm(p=p, ncrit=ncrit, wavek=wavek, filename="test_file.dat")
-
+    fmm = helmholtz.HelmholtzFmm(
+        p=options.p,
+        ncrit=options.ncrit,
+        wavek=options.wavek,
+        filename="test_file.dat"
+    )
     tree = helmholtz.setup(sources, targets, fmm)
-    eval(charges) = eval_hfmm(tree, fmm, charges)
+    eval(charges) = eval_fmm(tree, fmm, charges, options)
+    
     return eval
+
 end
 
-function eval_hfmm(
+function eval_fmm(
     tree,
     fmm,
-    charges::Vector{ComplexF64}
+    charges::Vector{ComplexF64},
+    options::HelmholtzFMMOptions
 )
     
     helmholtz.update_charges(tree, charges)
     helmholtz.clear_values(tree)               
     trg_values = helmholtz.evaluate(tree, fmm)
+
+    return trg_values, fmm.verify(tree.leafs)
+end
+
+function eval_fmm(
+    tree,
+    fmm,
+    charges::Vector{F},
+    options::LaplaceFMMOptions{I}
+) where {I, F <: Real} 
+
+    laplace.update_charges(tree, charges)
+    laplace.clear_values(tree)               
+    trg_values = laplace.evaluate(tree, fmm)
 
     return trg_values, fmm.verify(tree.leafs)
 end

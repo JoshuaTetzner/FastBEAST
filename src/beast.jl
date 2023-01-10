@@ -62,8 +62,7 @@ function fmmassemble(
     nmin=5,
     threading=:single,
     npoints=3,
-    fmmncrit=200,
-    fmmp=10
+    fmmoptions=LaplaceFMMOptions()
 )
     fullrankblocks, correctionblocks, _ = getfullrankblocks(
         operator,
@@ -79,12 +78,11 @@ function fmmassemble(
     
     points, qp = meshtopoints(test_functions, npoints)
     B = getBmatrix(qp, test_functions);
-    fmm = assemble_hfmm(
+
+    fmm = assemble_fmm(
         points,
         points,
-        p=fmmp,
-        wavek=imag(operator.gamma),
-        ncrit=fmmncrit
+        fmmoptions#HelmholtzFMMOptions(fmmp, fmmncrit, imag(operator.gamma))
     )
 
     return FMMMatrix(
