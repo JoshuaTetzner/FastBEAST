@@ -122,13 +122,13 @@ function getfullrankblocks(
 end
 
 # mapping mesh to quadrature points
-function meshtopoints(X0::BEAST.LagrangeBasis, quadorder)
+function meshtopoints(X::BEAST.LagrangeBasis, quadorder)
 
-    test_elements, _, _ = assemblydata(X0)
-    tshapes = refspace(X0)
+    test_elements, _, _ = assemblydata(X)
+    tshapes = refspace(X)
 
     test_eval(x) = tshapes(x, Val{:withcurl})
-    qp = quadpoints(test_eval,  test_elements, (quadorder,));
+    qp = quadpoints(test_eval,  test_elements, (quadorder,))
     points = zeros(Float64, length(qp) * length(qp[1,1]), 3)
     ind = 1
     for el in qp
@@ -144,32 +144,62 @@ function meshtopoints(X0::BEAST.LagrangeBasis, quadorder)
 end
 
 # construction of B matrix, if Ax = b and A = transpose(B)GB
-function getBmatrix(qp::Matrix, X0::BEAST.LagrangeBasis)
-    rfspace = refspace(X0)
-    _, tad, _ = assemblydata(X0)
-    len = length(qp) * length(qp[1,1]) * length(tad.data[1,:,1])
-    rows = zeros(Int, len)
-    cols = zeros(Int, len)
+function getBmatrix(qp::Matrix, X::BEAST.LagrangeBasis)
+    rfspace = refspace(X)
+    _, tad, _ = assemblydata(X)
+    len = length(qp) * length(qp[1,1]) * size(tad.data)[1] * size(tad.data)[2]
+    rows = ones(Int, len)
+    cols = ones(Int, len)
     vals = zeros(Float64, len)
     sind = 1
-    for nf in eachindex(X0.geo.faces)
-        ind = (nf - 1) * length(qp[1,1])
-        for (np, point) in enumerate(qp[1, nf])
+
+    for (ncell, cell) in enumerate(qp[1,:])
+        ind = (ncell - 1) * length(cell)
+        for (npoint, point) in enumerate(cell)
             val = rfspace(point.point)
-            i = 1
-            for (ifd, fd) in tad.data[1,:,nf]
-                if ifd != 0
-                    rows[sind] = ind + np
-                    cols[sind] = ifd
-                    vals[sind] = val[i].value * point.weight
-                    sind += 1
-                    i += 1
+            for localbasis in eachindex(val)
+                for data in tad.data[:,localbasis,ncell]
+                    if data[1] != 0 && ind + npoint != 0
+                        rows[sind] = ind + npoint
+                        cols[sind] = data[1]
+                        vals[sind] = val[localbasis].value * point.weight * data[2]
+                        sind += 1
+                    end 
                 end 
-            end 
+            end
         end
     end
 
-    return sparse(rows, cols, vals)
+    return dropzeros(sparse(rows, cols, vals))
+end
+
+function getBmatrix_curl(qp::Matrix, X::BEAST.LagrangeBasis, n)
+    rfspace = refspace(X)
+    _, tad, _ = assemblydata(X)
+    len = length(qp) * length(qp[1,1]) * size(tad.data)[1] * size(tad.data)[2]
+    rows = ones(Int, len)
+    cols = ones(Int, len)
+    vals = zeros(Float64, len)
+    sind = 1
+
+    for (ncell, cell) in enumerate(qp[1,:])
+        ind = (ncell - 1) * length(cell)
+        for (npoint, point) in enumerate(cell)
+            val = rfspace(point.point)
+            for localbasis in eachindex(val)
+                for data in tad.data[:,localbasis,ncell]
+                    if data[1] != 0 && ind + npoint != 0
+                        rows[sind] = ind + npoint
+                        cols[sind] = data[1]
+                        vals[sind] = val[localbasis].curl[n] * point.weight * data[2]
+                        sind += 1
+                    end 
+                end 
+            end
+        end
+    end
+
+    return dropzeros(sparse(rows, cols, vals))
 end
 
 # create sparse matrix from fullrankblocks

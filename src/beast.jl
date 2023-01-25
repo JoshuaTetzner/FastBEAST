@@ -59,7 +59,7 @@ function fmmassemble(
     operator::BEAST.AbstractOperator,
     test_functions::BEAST.LagrangeBasis,
     trial_functions::BEAST.LagrangeBasis;
-    nmin=5,
+    nmin=10,
     threading=:single,
     npoints=3,
     fmmoptions=LaplaceFMMOptions()
@@ -77,23 +77,96 @@ function fmmassemble(
     BtCB = fullmatrix(correctionblocks)
     
     points, qp = meshtopoints(test_functions, npoints)
-    B = getBmatrix(qp, test_functions);
+    B = getBmatrix(qp, test_functions)
 
     fmm = assemble_fmm(
         points,
         points,
-        fmmoptions#HelmholtzFMMOptions(fmmp, fmmncrit, imag(operator.gamma))
+        fmmoptions
     )
 
-    return FMMMatrix(
-        fmm,
-        B,
-        sparse(transpose(B)),
-        BtCB,
-        fullmat,
-        size(fullmat)[1],
-        size(fullmat)[2]
-    ) 
+    if operator isa BEAST.HH3DDoubleLayer
+
+        normals = zeros(Float64, length(qp)*length(qp[1,1]), 3)
+        for (i, points) in enumerate(qp[1,:])
+            for (j, point) in enumerate(qp[1,i])
+                normals[(i-1)*length(points) + j, :] = normal(point.point)
+            end
+        end
+
+        return FMMMatrixDL(
+            fmm,
+            normals,
+            B,
+            sparse(transpose(B)),
+            BtCB,
+            fullmat,
+            size(fullmat)[1],
+            size(fullmat)[2]
+        )
+    
+    elseif operator isa BEAST.HH3DDoubleLayerTransposed 
+
+        normals = zeros(Float64, length(qp)*length(qp[1,1]), 3)
+        for (i, points) in enumerate(qp[1,:])
+            for (j, point) in enumerate(qp[1,i])
+                normals[(i-1)*length(points) + j, :] = normal(point.point)
+            end
+        end
+
+        return FMMMatrixADL(
+            fmm,
+            normals,
+            B,
+            sparse(transpose(B)),
+            BtCB,
+            fullmat,
+            size(fullmat)[1],
+            size(fullmat)[2]
+        )
+
+    elseif operator isa BEAST.HH3DHyperSingularFDBIO
+        
+        normals = zeros(Float64, length(qp)*length(qp[1,1]), 3)
+        for (i, points) in enumerate(qp[1,:])
+            for (j, point) in enumerate(qp[1,i])
+                normals[(i-1)*length(points) + j, :] = normal(point.point)
+            end
+        end
+
+        Bcurl1 = getBmatrix_curl(qp, test_functions, 1)
+        Bcurl2 = getBmatrix_curl(qp, test_functions, 2)
+        Bcurl3 = getBmatrix_curl(qp, test_functions, 3)
+        
+        return FMMMatrixHS(
+            fmm,
+            normals,
+            Bcurl1,
+            Bcurl2,
+            Bcurl3,
+            sparse(transpose(Bcurl1)),
+            sparse(transpose(Bcurl2)),
+            sparse(transpose(Bcurl3)),
+            B,
+            sparse(transpose(B)),
+            BtCB,
+            fullmat,
+            size(fullmat)[1],
+            size(fullmat)[2]
+        )
+
+    else
+        
+        return FMMMatrixSL(
+            fmm,
+            B,
+            sparse(transpose(B)),
+            BtCB,
+            fullmat,
+            size(fullmat)[1],
+            size(fullmat)[2]
+        )
+    end
 end
 
 # The following to function ensure that no dynamic dispatching is
@@ -129,7 +202,6 @@ struct SafeDoubleQuadRule{P,Q}
 end
 
 function BEAST.quadrule(op, tref, bref, i ,τ, j, σ, qd, qs::SafeDoubleNumQStrat)
-
     return SafeDoubleQuadRule(
         qd.test_qp[1,i],
         qd.bsis_qp[1,j])
