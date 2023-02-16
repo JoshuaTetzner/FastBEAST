@@ -5,6 +5,7 @@ function hassemble(
     test_functions,
     trial_functions;
     compressor=:aca,
+    pivoting=:max,
     tol=1e-4,
     treeoptions=BoxTreeOptions(nmin=100),
     maxrank=200,
@@ -37,12 +38,26 @@ function hassemble(
     test_tree = create_tree(test_functions.pos, treeoptions)
     trial_tree = create_tree(trial_functions.pos, treeoptions)
 
+    
+    piv1(roworcolumn, acausedindices, totalindices) = smartmaxlocal(roworcolumn, acausedindices, totalindices) 
+    pivstrat=piv1
+    if pivoting != :max
+        piv2(roworcolumn, acausedindices, totalindices) = minimalfilldistance(
+            trial_functions,
+            roworcolumn,
+            acausedindices,
+            totalindices
+        )
+        pivstrat=piv2
+    end
+
     @time hmat = HMatrix(
         assembler,
         test_tree,
         trial_tree,
         Int64,
         scalartype(operator),
+        pivstrat=pivstrat,
         compressor=compressor,
         tol=tol,
         maxrank=maxrank,
@@ -128,8 +143,10 @@ function BEAST.quadrule(op, tref, bref,
     i ,τ, j, σ, qd, qs::BEAST.DoubleNumQStrat)
 
     return BEAST.DoubleQuadRule(
-        qd.test_qp[1,i],
-        qd.bsis_qp[1,j])
+        qd.tpoints[1,i],
+        qd.bpoints[1,j])    
+        #qd.test_qp[1,i],
+        #qd.bsis_qp[1,j])
 end
 
 

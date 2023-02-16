@@ -185,6 +185,7 @@ function HMatrix(
     sourcetree::T,#::BoxTreeNode,
     ::Type{I},
     ::Type{K};
+    pivstrat=smartmaxlocal,
     compressor=:naive,
     tol=1e-4,
     maxrank=100,
@@ -292,6 +293,7 @@ function HMatrix(
                     I,
                     K,
                     am,
+                    pivstrat,
                     compressor=compressor,
                     tol=tol,
                     maxrank=maxrank,
@@ -316,6 +318,7 @@ function HMatrix(
                     I,
                     K,
                     ams[Threads.threadid()],
+                    pivstrat,
                     compressor=compressor,
                     tol=tol,
                     maxrank=maxrank,
@@ -451,7 +454,8 @@ function getcompressedmatrix(
     sourcenode,
     ::Type{I},
     ::Type{K},
-    am;
+    am,
+    pivstrat::Function;
     tol=1e-4,
     maxrank=100,
     compressor=:aca,
@@ -462,7 +466,8 @@ function getcompressedmatrix(
 
         U, V = aca(
             lm,
-            am;
+            am,
+            pivstrat;
             tol=tol,
             svdrecompress=svdrecompress
         )

@@ -15,8 +15,8 @@ k = 2*π/λ
 ω = k*c
 η = sqrt(μ/ε)
 
-a = 1
-Γ_orig = CompScienceMeshes.meshcuboid(a,a,a,0.05)
+a = 1.0
+Γ_orig = CompScienceMeshes.meshcuboid(a,a,a,0.1)
 Γ = translate(Γ_orig,SVector(-a/2,-a/2,-a/2))
 
 Φ, Θ = [0.0], range(0,stop=π,length=100)
@@ -42,11 +42,12 @@ H = (-1/(im*μ*ω))*curl(E)
 X = raviartthomas(Γ)
 
 println("Number of RWG functions: ", numfunctions(X))
-
+X.pos
 T = hassemble(
     𝓣,
     X,
     X,
+    pivoting=:filldistance,
     treeoptions=KMeansTreeOptions(nmin=30),
     threading=:single,
     quadstrat=BEAST.DoubleNumQStrat(1, 1),
@@ -57,7 +58,7 @@ T = hassemble(
 e = assemble(𝒆,X)
 ##
 println("Enter iterative solver")
-@time j_EFIE, ch = IterativeSolvers.gmres(T, e, log=true, reltol=1e-4, maxiter=500)
+@time j_EFIE, ch = IterativeSolvers.gmres(T, e, verbose=true, log=true, reltol=1e-4, maxiter=500)
 println("Finished iterative solver part. Number of iterations: ", ch.iters)
 
 nf_E_EFIE = potential(MWSingleLayerField3D(wavenumber=k), pts, j_EFIE, X)

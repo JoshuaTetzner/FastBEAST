@@ -217,3 +217,6 @@ lm = LazyMatrix(fct, Vector(1:size(A, 1)), Vector(1:size(A, 2)), Float64)
 
 U, V = aca(lm)
 @test U*V ≈ A atol = 1e-14
+
+##
+used = zeros(Bool, 10)

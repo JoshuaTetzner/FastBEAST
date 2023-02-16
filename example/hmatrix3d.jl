@@ -119,13 +119,19 @@ end
 ## Example1 a) Random distribution
 N = 5000
 spoints = [@SVector rand(3) for i = 1:N];
-
 ## Example2 a) Not evenly distributed sphere
 spoints = [SVector((sin(i)*cos(j),sin(i)*sin(j),cos(i))) for j=0:0.1:2*pi for i = 0:0.1:pi];
 
 ## Example2 b) Not evenly distributed sphere like shape
-spoints = [SVector((sin(i)*cos(j),sin(i)*sin(j),i^2*cos(i))) for j=0:0.1:2*pi for i = 0:0.1:pi];
+spoints = [SVector((sin(i)*cos(j),sin(i)*sin(j),i^2*cos(i))) for j=0:0.1:2*pi for i = 0:0.1:2*pi];
 
+##
+pivoting(roworcolumn, acausedindices, totalindices) = FastBEAST.minimalfilldistance(
+    spoints,
+    roworcolumn,
+    acausedindices,
+    totalindices
+)
 ##
 @views OneoverRkernelassembler(matrix, tdata, sdata) = assembler(
     OneoverRkernel,
@@ -139,10 +145,24 @@ kmat = assembler(OneoverRkernel, spoints, spoints)
 
 @printf("Accuracy test: %.2e\n", estimate_reldifference(hmat,kmat))
 @printf("Compression rate: %.2f %%\n", compressionrate(hmat)*100)
-
-stree = create_tree(spoints, KMeansTreeOptions(iterations=100,nchildren=2,nmin=20))
+##
+stree = create_tree(spoints, KMeansTreeOptions(iterations=100,nchildren=2,nmin=40))
 kmat = assembler(OneoverRkernel, spoints, spoints)
 @time hmat = HMatrix(OneoverRkernelassembler, stree, stree, compressor=:aca, Int64, Float64)
 
 @printf("Accuracy test: %.2e\n", estimate_reldifference(hmat,kmat))
 @printf("Compression rate: %.2f %%\n", compressionrate(hmat)*100)
+
+
+##
+using Plots
+plotlyjs()
+test = zeros(Float64, 10000, 3)
+ind = 1
+for i = 0.0:0.2:2*pi
+    for j = 0.0:0.2:2*pi
+        test[ind, :] = [sin(i)*cos(j),sin(i)*sin(j),i^2*cos(i)]
+        ind += 1
+    end
+end
+scatter(test[:,1], test[:,2], test[:,3])

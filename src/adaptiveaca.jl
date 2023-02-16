@@ -1,3 +1,5 @@
+using BEAST
+
 struct LazyMatrix{I, F} <: AbstractMatrix{F}
     μ::Function
     τ::Vector{I}
@@ -49,26 +51,10 @@ end
 
 maxrank(acamemory::ACAGlobalMemory) = size(acamemory.U, 2)
 
-
-function smartmaxlocal(roworcolumn, acausedindices)
-    maxval = -1
-    index = -1
-    for i=1:length(roworcolumn)
-        if !acausedindices[i]
-            if abs(roworcolumn[i]) > maxval
-                maxval = abs(roworcolumn[i]) 
-                index = i
-            end
-        end
-    end
-    return index, maxval
-end
-
 function minfilldistance(used::Vector{T}, points::Matrix{F}) where {T, F}
     usedP = []
     for (i, val) in enumerate(used)
         if val
-            #println("used: ", i)
             push!(usedP, i)
         end
     end
@@ -87,24 +73,44 @@ function minfilldistance(used::Vector{T}, points::Matrix{F}) where {T, F}
     return argmax(vals) 
 end
 
+function mean(v::Array{F}) where F
+    return sum(v) / length(v)
+end
+
+function variance(v::Array{F}; μ=sum(v)/length(v)) where F
+    return sum((v .- μ).^2) / length(v)
+end
+
+function randomcheck(M::LazyMatrix{I, F}) where {I, F}
+    rc = zeros(I, Int(round((length(M.τ) + length(M.σ)) / 2)), 2)
+    vals = zeros(F, size(rc)[1], 1)
+
+    rc[:, 1] = rand(1:length(M.τ), size(rc)[1])
+    rc[:, 2] = rand(1:length(M.σ), size(rc)[1])
+
+    for i in eachindex(vals[:,1])
+        @views M.μ(vals[i:i, 1], M.τ[rc[i:i,1]], M.σ[rc[i:i,2]])
+    end
+    return rc, vals
+end
+
 function aca(
-    A, 
     M::LazyMatrix{I, F},
     am::ACAGlobalMemory{F},
-    M2::FillDistance{T, F},
-    pivstrat;
+    pivoting::Function;
+    firstrow=1,
     tol=1e-14,
     svdrecompress=true
-) where {T, I, F}
+) where {I, F}
 
+    rc, vals_check = randomcheck(M)
     Ic = 1
     Jc = 1
 
     (maxrows, maxcolumns) = size(M)
 
-    nextrow = 1
+    nextrow = firstrow
     am.used_I[nextrow] = true
-    M2.usedsrc[1] = true
     i = 1
 
     @views M.μ(
@@ -112,17 +118,14 @@ function aca(
         M.τ[nextrow:nextrow],
         M.σ[1:size(M,2)]
     )
-    #if pivstrat == :max
-        @views nextcolumn, maxval = smartmaxlocal(
-            am.V[Ic:Ic, 1:maxcolumns],
-            am.used_J[1:maxcolumns]
-        )
-    #else
-    #    nextcolumn=1
-    #end
+    
+    @views nextcolumn, maxval = smartmaxlocal(
+        am.V[Ic:Ic, 1:maxcolumns],
+        am.used_J[1:maxcolumns],
+        M.σ    
+    )
 
     am.used_J[nextcolumn] = true
-    M2.usedtrg[1] = true
 
     dividor = am.V[Ic, nextcolumn]
     @views am.V[Ic:Ic, 1:maxcolumns] ./= dividor
@@ -133,23 +136,27 @@ function aca(
         M.σ[nextcolumn:nextcolumn]
     )
 
+    for ci = 1:size(rc)[1]
+        vals_check[ci] -= am.U[rc[ci, 1], Jc] .* am.V[Ic, rc[ci, 2]]
+    end
     @views normUVlastupdate = norm(am.U[1:maxrows, 1])*norm(am.V[1, 1:maxcolumns])
     normUVsqared = normUVlastupdate^2
-   
-    while normUVlastupdate > sqrt(normUVsqared)*tol && 
+    CV_v2 = variance(am.V[Ic:Ic, :].^2) / mean(am.V[Ic:Ic, :].^2)^2
+    CV_u2 = variance(am.U[:, Jc:Jc].^2) / mean(am.U[:, Jc:Jc].^2)^2
+    CV = sqrt(CV_v2 + CV_u2 + CV_u2 * CV_v2)
+     
+    while normUVlastupdate > sqrt(normUVsqared)*tol &&#mean(abs.(vals_check.^2)) > tol^2 / (length(M.τ) * length(M.σ)) * normUVsqared &&# 
         i <= length(M.τ)-1 &&
         i <= length(M.σ)-1 &&
-        Jc < maxrank(am)
-        println("true", norm(am.U * am.V - A), ", ",normUVlastupdate)
+        Jc < maxrank(am) 
+
+        println("CV: ", CV)
         i += 1
-        if pivstrat == :max
-            @views nextrow, maxval = smartmaxlocal(
-                am.U[1:maxrows,Jc],
-                am.used_I[1:maxrows]
-            )
-        else
-            nextrow = minfilldistance(M2.usedtrg, M2.trg)
-        end
+        @views nextrow, maxval = pivoting(
+            am.U[1:maxrows,Jc],
+            am.used_I[1:maxrows],
+            M.τ
+        )
 
         am.used_I[nextrow] = true
 
@@ -166,16 +173,14 @@ function aca(
                 am.V[Ic, kk] -= am.U[nextrow, k]*am.V[k, kk]
             end
         end
-        #if pivstrat == :max
-            @views nextcolumn, maxval = smartmaxlocal(
-                am.V[Ic, 1:maxcolumns],
-                am.used_J[1:maxcolumns]
-            )
-        #else
-        #    nextcolumn = minfilldistance(M2.usedsrc, M2.src)
-        #end
+        
+        @views nextcolumn, maxval = smartmaxlocal(
+            am.V[Ic, 1:maxcolumns],
+            am.used_J[1:maxcolumns],
+            M.σ
+        )
 
-        if (isapprox(am.V[Ic, nextcolumn],0.0))
+        if (isapprox(am.V[Ic, nextcolumn], 0.0))
             normUVlastupdate = 0.0
             am.V[Ic:Ic, 1:maxcolumns] .= 0.0
             Ic -= 1
@@ -199,14 +204,20 @@ function aca(
                     am.U[kk, Jc] -= am.U[kk, k]*am.V[k, nextcolumn]
                 end
             end
-
-            @views normUVlastupdate = norm(am.U[1:maxrows,Jc])*norm(am.V[Ic,1:maxcolumns])
-
-            normUVsqared += normUVlastupdate^2
-            for j = 1:(Jc-1)
-                @views normUVsqared += 2*abs(dot(am.U[1:maxrows,Jc], am.U[1:maxrows,j])*dot(am.V[Ic,1:maxcolumns], am.V[j,1:maxcolumns]))
+            @views normUVlastupdate = norm(am.U[1:maxrows, Jc])*norm(am.V[Ic, 1:maxcolumns])
+            for ci = 1:size(rc)[1]
+                vals_check[ci] -= am.U[rc[ci, 1], Jc] .* am.V[Ic, rc[ci, 2]]
             end
-            normUVsqared += norm(am.U[1:maxrows,Jc])^2*nomr(am.V[Ic,1:maxcolumns])^2
+
+            normUVsqared += (norm(am.U[1:maxrows, Jc])*norm(am.V[Ic, 1:maxcolumns]))^2#normUVlastupdate^2
+            for j = 1:(Jc-1)
+                @views normUVsqared += 2*real(dot(am.U[1:maxrows,Jc], am.U[1:maxrows,j])*dot(am.V[Ic,1:maxcolumns], am.V[j,1:maxcolumns]))
+            end
+
+            
+            CV_v2 = variance(abs.(am.V[Ic:Ic, :]).^2) / mean(abs.(am.V[Ic:Ic, :]).^2)^2
+            CV_u2 = variance(abs.(am.U[:, Jc:Jc]).^2) / mean(abs.(am.U[:, Jc:Jc]).^2)^2
+            CV = sqrt(CV_v2 + CV_u2 + CV_u2 * CV_v2)
         end
     end
 
@@ -247,23 +258,87 @@ function aca(
     end    
 end
 
+
 function aca(
-    A,
-    M::LazyMatrix{I, F},
-    M2::FillDistance{T, F},
-    pivstrat;
+    M::LazyMatrix{I, F};
+    pivoting=smartmaxlocal,
     tol=1e-14,
     maxrank=40,
     svdrecompress=false
-) where {T, I, F}
+) where {I, F}
 
     return aca(
-        A,
         M,
         allocate_aca_memory(F, size(M, 1), size(M, 2); maxrank=maxrank),
-        M2,
-        pivstrat,
+        pivoting,
         tol=tol,
         svdrecompress=svdrecompress
     )
+end
+
+function minimalfilldistance(
+    trial_functions::BEAST.Space,
+    roworcolumn, 
+    acausedindices,
+    totalindices
+)
+    if maximum(acausedindices)
+        filldis = zeros(Float64, length(totalindices))
+        for i in eachindex(totalindices)
+            dist = []
+            for j in eachindex(acausedindices)
+                if acausedindices[j]
+                    push!(dist, norm(
+                        trial_functions.pos[totalindices[i]] - 
+                        trial_functions.pos[totalindices[j]]
+                    ))
+                end
+            end
+            filldis[i] = minimum(dist)
+        end
+        return argmax(filldis), maximum(filldis)
+    else
+        return 1, 1 
+    end
+end
+
+function minimalfilldistance(
+    trial_functions::Vector{SVector{3, Float64}},
+    roworcolumn, 
+    acausedindices,
+    totalindices
+)
+    if maximum(acausedindices)
+        filldis = zeros(Float64, length(totalindices))
+        for i in eachindex(totalindices)
+            dist = []
+            for j in eachindex(acausedindices)
+                if acausedindices[j]
+                    push!(dist, norm(
+                        trial_functions[totalindices[i]] - 
+                        trial_functions[totalindices[j]]
+                    ))
+                end
+            end
+            filldis[i] = minimum(dist)
+        end
+        return argmax(filldis), maximum(filldis)
+    else
+        return 1, 1 
+    end
+end
+
+
+function smartmaxlocal(roworcolumn, acausedindices, totalindices)
+    maxval = -1
+    index = -1
+    for i = 1:length(roworcolumn)
+        if !acausedindices[i]
+            if abs(roworcolumn[i]) > maxval
+                maxval = abs(roworcolumn[i]) 
+                index = i
+            end
+        end
+    end
+    return index, maxval
 end
