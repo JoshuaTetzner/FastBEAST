@@ -3,6 +3,7 @@ using LinearAlgebra
 include("tree/tree.jl")
 
 include("adaptiveaca.jl")
+include("modifiedaca.jl")
 include("skeletons.jl")
 include("hmatrix.jl")
 include("utils.jl")

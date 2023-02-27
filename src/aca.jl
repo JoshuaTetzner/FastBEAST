@@ -4,13 +4,6 @@ struct LazyMatrix{I, F} <: AbstractMatrix{F}
     σ::Vector{I}
 end
 
-struct FillDistance{I, F}
-    usedsrc::Vector{I}
-    usedtrg::Vector{I}
-    src::Matrix{F}
-    trg::Matrix{F}
-end
-
 Base.size(A::LazyMatrix) = (length(A.τ), length(A.σ))
 
 function Base.getindex(
@@ -64,38 +57,12 @@ function smartmaxlocal(roworcolumn, acausedindices)
     return index, maxval
 end
 
-function minfilldistance(used::Vector{T}, points::Matrix{F}) where {T, F}
-    usedP = []
-    for (i, val) in enumerate(used)
-        if val
-            #println("used: ", i)
-            push!(usedP, i)
-        end
-    end
-    vals = zeros(length(used))
-    for i in eachindex(used)
-        vals[i] = norm(points[i, :] - points[usedP[1], :])
-        for j in eachindex(usedP)
-            if vals[i] > norm(points[i, :] - points[usedP[j], :])
-                vals[i] = norm(points[i, :] - points[usedP[j], :])
-            end
-        end
-    end
-
-    used[argmax(vals)] = true
-
-    return argmax(vals) 
-end
-
 function aca(
-    A, 
     M::LazyMatrix{I, F},
-    am::ACAGlobalMemory{F},
-    M2::FillDistance{T, F},
-    pivstrat;
+    am::ACAGlobalMemory{F};
     tol=1e-14,
     svdrecompress=true
-) where {T, I, F}
+) where {I, F}
 
     Ic = 1
     Jc = 1
@@ -104,7 +71,7 @@ function aca(
 
     nextrow = 1
     am.used_I[nextrow] = true
-    M2.usedsrc[1] = true
+
     i = 1
 
     @views M.μ(
@@ -112,17 +79,13 @@ function aca(
         M.τ[nextrow:nextrow],
         M.σ[1:size(M,2)]
     )
-    #if pivstrat == :max
-        @views nextcolumn, maxval = smartmaxlocal(
-            am.V[Ic:Ic, 1:maxcolumns],
-            am.used_J[1:maxcolumns]
-        )
-    #else
-    #    nextcolumn=1
-    #end
+
+    @views nextcolumn, maxval = smartmaxlocal(
+        am.V[Ic:Ic, 1:maxcolumns],
+        am.used_J[1:maxcolumns]
+    )
 
     am.used_J[nextcolumn] = true
-    M2.usedtrg[1] = true
 
     dividor = am.V[Ic, nextcolumn]
     @views am.V[Ic:Ic, 1:maxcolumns] ./= dividor
@@ -140,16 +103,13 @@ function aca(
         i <= length(M.τ)-1 &&
         i <= length(M.σ)-1 &&
         Jc < maxrank(am)
-        println("true", norm(am.U * am.V - A), ", ",normUVlastupdate)
+
         i += 1
-        if pivstrat == :max
-            @views nextrow, maxval = smartmaxlocal(
-                am.U[1:maxrows,Jc],
-                am.used_I[1:maxrows]
-            )
-        else
-            nextrow = minfilldistance(M2.usedtrg, M2.trg)
-        end
+
+        @views nextrow, maxval = smartmaxlocal(
+            am.U[1:maxrows,Jc],
+            am.used_I[1:maxrows]
+        )
 
         am.used_I[nextrow] = true
 
@@ -166,14 +126,11 @@ function aca(
                 am.V[Ic, kk] -= am.U[nextrow, k]*am.V[k, kk]
             end
         end
-        #if pivstrat == :max
-            @views nextcolumn, maxval = smartmaxlocal(
-                am.V[Ic, 1:maxcolumns],
-                am.used_J[1:maxcolumns]
-            )
-        #else
-        #    nextcolumn = minfilldistance(M2.usedsrc, M2.src)
-        #end
+
+        @views nextcolumn, maxval = smartmaxlocal(
+            am.V[Ic, 1:maxcolumns],
+            am.used_J[1:maxcolumns]
+        )
 
         if (isapprox(am.V[Ic, nextcolumn],0.0))
             normUVlastupdate = 0.0
@@ -206,7 +163,6 @@ function aca(
             for j = 1:(Jc-1)
                 @views normUVsqared += 2*abs(dot(am.U[1:maxrows,Jc], am.U[1:maxrows,j])*dot(am.V[Ic,1:maxcolumns], am.V[j,1:maxcolumns]))
             end
-            normUVsqared += norm(am.U[1:maxrows,Jc])^2*nomr(am.V[Ic,1:maxcolumns])^2
         end
     end
 
@@ -248,21 +204,15 @@ function aca(
 end
 
 function aca(
-    A,
     M::LazyMatrix{I, F},
-    M2::FillDistance{T, F},
-    pivstrat;
     tol=1e-14,
     maxrank=40,
-    svdrecompress=false
-) where {T, I, F}
+    svdrecompress=true
+) where {I, F}
 
     return aca(
-        A,
         M,
         allocate_aca_memory(F, size(M, 1), size(M, 2); maxrank=maxrank),
-        M2,
-        pivstrat,
         tol=tol,
         svdrecompress=svdrecompress
     )

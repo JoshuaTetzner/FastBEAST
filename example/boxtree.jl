@@ -76,10 +76,10 @@ bboxframes = collectleafboxframes(tree)
 plot_boxframes!(plt, bboxframes)
 
 ##
-points3D = [@SVector rand(3) for i=1:100] + [SVector(0.0, 0.0, 0.0) for i=1:100]
+points3D = [@SVector rand(3) for i=1:1000] + [SVector(0.0, 0.0, 0.0) for i=1:1000]
 
-tree = create_tree(points3D, BoxTreeOptions(nmin=3))
-
+@time tree = create_tree(points3D, BoxTreeOptions(nmin=10));
+##
 plt = scatter([points3D[i][1] for i=1:length(points3D)], 
         [points3D[i][2] for i=1:length(points3D)], 
         [points3D[i][3] for i=1:length(points3D)],

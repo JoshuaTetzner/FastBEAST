@@ -6,13 +6,6 @@ struct LazyMatrix{I, F} <: AbstractMatrix{F}
     σ::Vector{I}
 end
 
-struct FillDistance{I, F}
-    usedsrc::Vector{I}
-    usedtrg::Vector{I}
-    src::Matrix{F}
-    trg::Matrix{F}
-end
-
 Base.size(A::LazyMatrix) = (length(A.τ), length(A.σ))
 
 function Base.getindex(
@@ -98,7 +91,7 @@ function aca(
     M::LazyMatrix{I, F},
     am::ACAGlobalMemory{F},
     pivoting::Function;
-    firstrow=1,
+    firstindex=1,
     tol=1e-14,
     svdrecompress=true
 ) where {I, F}
@@ -109,7 +102,7 @@ function aca(
 
     (maxrows, maxcolumns) = size(M)
 
-    nextrow = firstrow
+    nextrow = firstindex
     am.used_I[nextrow] = true
     i = 1
 
@@ -141,16 +134,18 @@ function aca(
     end
     @views normUVlastupdate = norm(am.U[1:maxrows, 1])*norm(am.V[1, 1:maxcolumns])
     normUVsqared = normUVlastupdate^2
-    CV_v2 = variance(am.V[Ic:Ic, :].^2) / mean(am.V[Ic:Ic, :].^2)^2
-    CV_u2 = variance(am.U[:, Jc:Jc].^2) / mean(am.U[:, Jc:Jc].^2)^2
+    CV_v2 = variance(abs.(am.V[Ic:Ic, :]).^2) / mean(abs.(am.V[Ic:Ic, :]).^2)^2
+    CV_u2 = variance(abs.(am.U[:, Jc:Jc]).^2) / mean(abs.(am.U[:, Jc:Jc]).^2)^2
     CV = sqrt(CV_v2 + CV_u2 + CV_u2 * CV_v2)
-     
-    while normUVlastupdate > sqrt(normUVsqared)*tol &&#mean(abs.(vals_check.^2)) > tol^2 / (length(M.τ) * length(M.σ)) * normUVsqared &&# 
+    breaker = true
+    #while breaker && # 
+    while normUVlastupdate > sqrt(normUVsqared)*tol &&
         i <= length(M.τ)-1 &&
         i <= length(M.σ)-1 &&
         Jc < maxrank(am) 
-
-        println("CV: ", CV)
+        #println("CV: ", CV)
+        #println(mean(abs.(vals_check.^2)), " < ", tol^2 / (length(M.τ) * length(M.σ)) * normUVsqared)
+        #println(normUVlastupdate)
         i += 1
         @views nextrow, maxval = pivoting(
             am.U[1:maxrows,Jc],
@@ -218,6 +213,10 @@ function aca(
             CV_v2 = variance(abs.(am.V[Ic:Ic, :]).^2) / mean(abs.(am.V[Ic:Ic, :]).^2)^2
             CV_u2 = variance(abs.(am.U[:, Jc:Jc]).^2) / mean(abs.(am.U[:, Jc:Jc]).^2)^2
             CV = sqrt(CV_v2 + CV_u2 + CV_u2 * CV_v2)
+            
+            #if mean(abs.(vals_check.^2)) <= tol^2 / (length(M.τ) * length(M.σ)) * normUVsqared# && CV < 4
+            #    breaker = false
+            #end
         end
     end
 
@@ -262,6 +261,7 @@ end
 function aca(
     M::LazyMatrix{I, F};
     pivoting=smartmaxlocal,
+    firstindex=1,
     tol=1e-14,
     maxrank=40,
     svdrecompress=false
@@ -271,6 +271,7 @@ function aca(
         M,
         allocate_aca_memory(F, size(M, 1), size(M, 2); maxrank=maxrank),
         pivoting,
+        firstindex=firstindex,
         tol=tol,
         svdrecompress=svdrecompress
     )
@@ -342,3 +343,8 @@ function smartmaxlocal(roworcolumn, acausedindices, totalindices)
     end
     return index, maxval
 end
+##
+
+a = rand(Bool, 10)
+a[1] = true
+argmin(a)

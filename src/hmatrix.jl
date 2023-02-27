@@ -213,11 +213,11 @@ function HMatrix(
     coldim = numindices(sourcetree)
 
     if threading == :single
-        am = allocate_aca_memory(K, rowdim, coldim, maxrank=100)
+        am = allocate_aca_memory(K, rowdim, coldim, maxrank=maxrank)
     else
         ams = ACAGlobalMemory{K}[]
         for i in 1:Threads.nthreads()
-            push!(ams, allocate_aca_memory(K, rowdim, coldim, maxrank=100))
+            push!(ams, allocate_aca_memory(K, rowdim, coldim, maxrank=maxrank))
         end
     end
     nonzeros_perthread = I[]
@@ -456,6 +456,7 @@ function getcompressedmatrix(
     ::Type{K},
     am,
     pivstrat::Function;
+    firstindex=1,
     tol=1e-4,
     maxrank=100,
     compressor=:aca,
@@ -468,6 +469,7 @@ function getcompressedmatrix(
             lm,
             am,
             pivstrat;
+            firstindex=firstindex,
             tol=tol,
             svdrecompress=svdrecompress
         )
