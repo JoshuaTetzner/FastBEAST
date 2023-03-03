@@ -121,8 +121,9 @@ function aca(
     am.used_J[nextcolumn] = true
 
     dividor = am.V[Ic, nextcolumn]
-    @views am.V[Ic:Ic, 1:maxcolumns] ./= dividor
-
+    if dividor != 0
+        @views am.V[Ic:Ic, 1:maxcolumns] ./= dividor
+    end
     @views M.μ(
         am.U[1:maxrows, Jc:Jc], 
         M.τ[1:size(M, 1)], 
@@ -134,9 +135,9 @@ function aca(
     end
     @views normUVlastupdate = norm(am.U[1:maxrows, 1])*norm(am.V[1, 1:maxcolumns])
     normUVsqared = normUVlastupdate^2
-    CV_v2 = variance(abs.(am.V[Ic:Ic, :]).^2) / mean(abs.(am.V[Ic:Ic, :]).^2)^2
-    CV_u2 = variance(abs.(am.U[:, Jc:Jc]).^2) / mean(abs.(am.U[:, Jc:Jc]).^2)^2
-    CV = sqrt(CV_v2 + CV_u2 + CV_u2 * CV_v2)
+    #CV_v2 = variance(abs.(am.V[Ic:Ic, :]).^2) / mean(abs.(am.V[Ic:Ic, :]).^2)^2
+    #CV_u2 = variance(abs.(am.U[:, Jc:Jc]).^2) / mean(abs.(am.U[:, Jc:Jc]).^2)^2
+    #CV = sqrt(CV_v2 + CV_u2 + CV_u2 * CV_v2)
     breaker = true
     #while breaker && # 
     while normUVlastupdate > sqrt(normUVsqared)*tol &&
@@ -297,6 +298,7 @@ function minimalfilldistance(
             end
             filldis[i] = minimum(dist)
         end
+        #println(argmax(filldis))
         return argmax(filldis), maximum(filldis)
     else
         return 1, 1 
@@ -323,6 +325,7 @@ function minimalfilldistance(
             end
             filldis[i] = minimum(dist)
         end
+        #println(argmax(filldis))
         return argmax(filldis), maximum(filldis)
     else
         return 1, 1 
@@ -341,6 +344,7 @@ function smartmaxlocal(roworcolumn, acausedindices, totalindices)
             end
         end
     end
+
     return index, maxval
 end
 ##

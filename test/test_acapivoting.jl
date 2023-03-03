@@ -66,7 +66,7 @@ k = 2*π/λ
 
 
 a = 1.0
-src1 = CompScienceMeshes.meshrectangle(1.0, 1.0, 0.3, 3)
+src1 = CompScienceMeshes.meshrectangle(1.0, 1.0, 0.5, 3)
 src2 = CompScienceMeshes.rotate(src1, SVector(-pi/2, 0, 0))
 src2 = CompScienceMeshes.translate(src2, SVector(0, 0,-1))
 
@@ -96,8 +96,8 @@ end
 test_tree = create_tree(Ytrg.pos, FastBEAST.BoxTreeOptions(nmin=10))
 trial_tree = create_tree(Xsrc.pos, FastBEAST.BoxTreeOptions(nmin=10))
 
-#piv(roworcolumn, acausedindices, totalindices) = FastBEAST.minimalfilldistance(Ytrg, roworcolumn, acausedindices, totalindices)#
-piv(roworcolumn, acausedindices, totalindices) = FastBEAST.smartmaxlocal(roworcolumn, acausedindices, totalindices)
+piv(roworcolumn, acausedindices, totalindices) = FastBEAST.minimalfilldistance(Ytrg, roworcolumn, acausedindices, totalindices)#
+#piv(roworcolumn, acausedindices, totalindices) = FastBEAST.smartmaxlocal(roworcolumn, acausedindices, totalindices)
 am = allocate_aca_memory(scalartype(MS), length(Xsrc.fns), length(Xtrg.fns), maxrank=100)
 block = FastBEAST.getcompressedmatrix(
     farassembler,

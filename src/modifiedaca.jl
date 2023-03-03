@@ -41,16 +41,40 @@ function pivoting(
     acausedindices,
     totalindices
 ) where {B, I, F}
+
     ind = argmax(pivoting.dist)
+
     for j in 1:length(pivoting.loc)
-        if !acausedindices[j]
-            ndist = norm(pivoting.loc[j] - pivoting.loc[ind])
-            if pivoting.dist[j] > ndist
-                pivoting.dist[j] = ndist
+        ndist = norm(pivoting.loc[j] - pivoting.loc[ind])
+        if pivoting.dist[j] > ndist
+            pivoting.dist[j] = ndist
+        end
+    end
+
+    return ind, 1
+end
+
+function firstindex(pivoting::FillDistance{B, I, F}) where {B, I, F}
+    mins = Vector(pivoting.loc[1])
+    max = Vector(pivoting.loc[1])
+
+    for loc in pivoting.loc
+        for i in eachindex(loc)
+            if mins[i] > loc[i]
+                mins[i] = loc[i]
+            elseif max[i] < loc[i]
+                max[i] = loc[i]
             end
         end
     end
-    return ind, 1
+
+    midpoint = (max - mins) ./ 2
+
+    for i in eachindex(pivoting.dist)
+        pivoting.dist[i] = norm(pivoting.loc[i]-midpoint)
+    end
+
+    return argmin(pivoting.dist)
 end
 
 function pivoting(
@@ -78,11 +102,15 @@ end
 function smartmaxlocal(roworcolumn, acausedindices)
     
     #println(acausedindices)
-    #println(round.(roworcolumn, digits=5))
-    if maximum(roworcolumn) != 0 && !acausedindices[argmax(roworcolumn)]
-        return argmax(roworcolumn), maximum(roworcolumn)
+    #println((roworcolumn))
+    if maximum(roworcolumn) != 0 
+        if !acausedindices[argmax(roworcolumn)]
+           return argmax(roworcolumn), maximum(roworcolumn)
+        else
+            throw("Something went wrong")
+        end
     else
-        throw("Something went wrong")
+        return argmin(acausedindices), 0.0
     end
 end
 
@@ -99,16 +127,23 @@ function modifiedaca(
     Jc = 1
 
     (maxrows, maxcolumns) = size(M)
-
-    nextrow = pivstrat.firstindex
+    if pivstrat isa FillDistance
+        nextrow = firstindex(pivstrat)
+    else
+        nextrow = pivstrat.firstindex
+    end
     am.used_I[nextrow] = true
     i = 1
-    if pivstrat isa FillDistance
-        for j in 2:length(pivstrat.loc)
-            pivstrat.dist[j] = norm(pivstrat.loc[j] - pivstrat.loc[pivstrat.firstindex])
-        end
-    end
 
+    #if pivstrat isa FillDistance
+    #    for j in 2:length(pivstrat.loc)
+    #        pivstrat.dist[j] = norm(pivstrat.loc[j] - pivstrat.loc[pivstrat.firstindex])
+    #    end
+    #end
+    #nextrow = pivstrat.firstindex
+    #am.used_I[nextrow] = true
+    #i = 1
+    
     @views M.μ(
         am.V[Ic:Ic, 1:maxcolumns], 
         M.τ[nextrow:nextrow],
