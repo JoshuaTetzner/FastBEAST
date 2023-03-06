@@ -1,6 +1,4 @@
 using FastBEAST
-using Pkg
-Pkg.add("Documenter")
 using Documenter
 
 makedocs(
@@ -12,6 +10,7 @@ makedocs(
                 "Manual" => Any[
                     "man/clustering.md",
                     "man/hmatrix.md",
+                    "man/fmm.md", 
                     "man/aca.md"
                     ],
                 "Types and Functions" => "functions.md"
@@ -20,3 +19,4 @@ deploydocs(
     repo="github.com/sbadrian/FastBEAST",
     devbranch = "main"
 )
+ 

@@ -14,7 +14,7 @@ Given is a random distribution of datapoints in 2D, which should be sorted in a 
 Two points out of the dataset are chosen as the first centers. For each of the points the euclidean distance to both centers is calculated by:
 
 ```math
-    dist = norm(x - c_i)\quad for\enspace i = 1,2,..,k
+    d = |x - c_i|\quad for\enspace i = 1,2,..,k
 ```
 With $x$ the location of the datapoint and $c_i$ the centers. The point is then added to the closer center.
 
