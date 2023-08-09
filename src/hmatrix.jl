@@ -400,6 +400,7 @@ function computerinteractions!(
     compressableinteractions::Vector{SVector{2}}
 ) where T <: AbstractNode
     if iscompressable(sourcenode, testnode)
+        println("in")
         if level(sourcenode) == 0 && level(testnode) == 0
             push!(compressableinteractions, SVector(testnode, sourcenode))
             return

@@ -13,6 +13,8 @@ include("fmm.jl")
 include("beast.jl")
 include("fmm/operators/FMMoperator.jl")
 
+include("tree/clustertrees.jl")
+
 export BoundingBox
 export getboxframe
 export getchildbox
