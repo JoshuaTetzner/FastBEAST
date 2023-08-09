@@ -23,6 +23,7 @@ function pivoting(
 ) where {I}
     
     if maximum(roworcolumn) != 0 
+    
         return argmax(roworcolumn .* (.!acausedindices))
     else 
         return argmin(acausedindices)
@@ -97,7 +98,7 @@ function pivoting(
                 strat.dist[gind] = norm(strat.loc[gind] - strat.loc[localind])
             end
         end
-
+        
         return localind
     end
 end

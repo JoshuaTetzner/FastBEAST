@@ -6,6 +6,8 @@ version = "0.1.0"
 [deps]
 BEAST = "bb4162c7-ba94-5a20-af32-d8ec4428bdd1"
 BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+BoundingSphere = "747eb165-47b8-53f2-ad32-9704a7dfc50a"
+ClusterTrees = "5100927d-02aa-593a-b4f9-7235df19f0db"
 Clustering = "aaaa29a8-35af-508c-8bc3-b662a17a0fe5"
 CompScienceMeshes = "3e66a162-7b8c-5da0-b8f8-124ecd2c3ae1"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
