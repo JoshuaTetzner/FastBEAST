@@ -2,28 +2,6 @@ using FastBEAST
 using StaticArrays
 using LinearMaps
 
-function cluster_tree(spoints, tpoints, maxlevel)
-    
-    stree = create_tree(spoints, KMeansTreeOptions(maxlevel=maxlevel))
-    ttree = create_tree(tpoints, KMeansTreeOptions(maxlevel=maxlevel))
-
-    fullinteractions = SVector{2}[]
-    compressableinteractions = Vector{Vector{SVector{2}}}(undef, maxlevel)
-    
-    computerinteractions!(
-        testtree,
-        sourcetree,
-        fullinteractions,
-        compressableinteractions
-    )
-
-end
-
-compressableinteractions = Vector{Vector{SVector{2}}}(undef, 4)
-
-compressableinteractions[1] = [SVector(1, 2), SVector(1, 2),SVector(1, 2)]
-compressableinteractions
-##
 mutable struct LeafInteractions{}
     snode::FastBEAST.AbstractNode
     tnodes::Vector{FastBEAST.AbstractNode} 
@@ -204,3 +182,5 @@ function leafinteractions(compressableinteractions::Vector{SVector{2}})
 
     return leaf, nonleafs
 end
+
+

@@ -10,8 +10,7 @@ include("utils.jl")
 include("fmm.jl")
 include("beast.jl")
 include("fmm/operators/FMMoperator.jl")
-
-include("tree/clustertrees.jl")
+include("tree/ClusterTrees/kmeansCT.jl")
 
 export BoundingBox
 export getboxframe
@@ -39,4 +38,8 @@ export compressionrate
 
 export hassemble
 export fmmassemble
+
+export create_CT_tree
+export computeinteractions
+
 end

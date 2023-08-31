@@ -114,7 +114,7 @@ function checkconvergence(
 ) where {I, F, K}
 
     if normU == 0 || normV == 0
-        # println("Alternatly structured matrixblock.")
+         println("Alternatly structured matrixblock.")
         if am.Ic > 1
             am.Ic -= 1
             am.Jc -= 1
@@ -124,7 +124,7 @@ function checkconvergence(
     else
         am.normUV += (normU * normV)^2
         for j = 1:(am.Jc-1)
-            @views am.normUV += 2*abs.(dot(am.U[1:maxrows, am.Jc], am.U[1:maxrows, j]) * dot(
+            @views am.normUV += 2*real.(dot(am.U[1:maxrows, am.Jc], am.U[1:maxrows, j]) * dot(
                 am.V[am.Ic, 1:maxcolumns],
                 am.V[j, 1:maxcolumns])
             )
