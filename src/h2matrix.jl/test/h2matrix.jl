@@ -140,4 +140,3 @@ Vs1
 Vs2
 
 
-norm(Ut1 * Z1[r_t1s, c_ts1]*Vs1 - Z1)/norm(Z1)

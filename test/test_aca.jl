@@ -201,7 +201,13 @@ U, V = aca(lm)
 @test U*V ≈ A atol = 1e-14
 
 ##
-A = rand(1,1)
+A = rand(100000,100)
+
+U,S,V = svd(A)
+S .= 0
+S[1:30] = [10.0^(-i) for i = 1:30 ]
+A = U*diagm(S)*V'
+
 
 @views function fct(B, x, y)
     B[:,:] = A[x, y]
