@@ -31,11 +31,12 @@ end
 struct KMeansTree{D} <: ClusterTrees.PointerBasedTrees.APBTree
     nodes::Vector{KMNode{D}}
     root::Int
+    num_elements::Int
     levels::Vector{Int}
 end
 
 
-function KMeansTree(;center=SVector(0.0, 0.0, 0.0), radius=0.0, data=Int[])
+function KMeansTree(num_elements; center=SVector(0.0, 0.0, 0.0), radius=0.0, data=Int[])
     root = KMNode(ClusterTrees.PointerBasedTrees.Node(
         Data(center, radius, data),
         0,
@@ -44,12 +45,11 @@ function KMeansTree(;center=SVector(0.0, 0.0, 0.0), radius=0.0, data=Int[])
         0
     ), 0)
 
-    return KMeansTree([root], 1, Int[1])
+    return KMeansTree([root], 1, num_elements, Int[1])
 end
 
-
-ClusterTrees.root(tree::KMeansTree) = tree.root
-ClusterTrees.data(tree::KMeansTree, node) = tree.nodes[node].node.data
+ClusterTrees.root(tree::KMeansTree{D}) where D = tree.root
+ClusterTrees.data(tree::KMeansTree{D}, node) where D = tree.nodes[node].node.data
 ClusterTrees.parent(tree::KMeansTree, node_idx) = tree.nodes[node_idx].node.parent
 ClusterTrees.PointerBasedTrees.nextsibling(tree::KMeansTree, node_idx) = 
     tree.nodes[node_idx].node.next_sibling
@@ -63,7 +63,7 @@ function rootstate(tree::KMeansTree, destination)
 end
 
 
-function value(tree::KMeansTree, node)
+function value(tree, node::Int) where D
 
     if !ClusterTrees.haschildren(tree, node)
         return tree.nodes[node].node.data.values
@@ -268,7 +268,7 @@ function listnearfarinteractions(
     
     isfar(state) && (push!(fars[level], block); return)
     !ClusterTrees.haschildren(block_tree, block) && (push!(nears, block); return)
-    for chd ∈ children(block_tree, block)
+    for chd ∈ ClusterTrees.children(block_tree, block)
         chd_state = updatestate(block_tree, chd)
         listnearfarinteractions(block_tree, chd, chd_state, nears, fars, level+1)
     end
@@ -304,7 +304,7 @@ function create_CT_tree(
         (3,length(points))
     )
 
-    tree = KMeansTree()
+    tree = KMeansTree(length(points))
     destination = (maxlevel, nchildren, pointsM, kmeans_settings)
     state = (1, 2, 1, Vector(1:length(points)))
     child!(tree, state, destination)
@@ -314,24 +314,29 @@ function create_CT_tree(
 end
 
 
-function computeinteractions(testtree::KMeansTree{D}, trialtree::KMeansTree{D}) where D
-
-    block_tree = ClusterTrees.BlockTrees.BlockTree(testtree, trialtree)
+function computeinteractions(tree::ClusterTrees.BlockTrees.BlockTree{T}) where T
 
     nears = Tuple{Int, Int}[]
-    num_levels = length(testtree.levels)
+    # Need better way to check depth
+    num_levels = length(tree.test_cluster.levels)
     fars = [Tuple{Int, Int}[] for l in 1:num_levels]
     
     root_state = (
-        (testtree.nodes[1].node.data.center, testtree.nodes[1].node.data.radius),
-        (trialtree.nodes[1].node.data.center, trialtree.nodes[1].node.data.radius),
+        (
+            tree.test_cluster.nodes[1].node.data.center,
+            tree.test_cluster.nodes[1].node.data.radius
+        ),
+        (
+            tree.trial_cluster.nodes[1].node.data.center,
+            tree.trial_cluster.nodes[1].node.data.radius
+        ),
     )
     root_level = 1
 
-    listnearfarinteractions(block_tree, ClusterTrees.root(block_tree),
+    listnearfarinteractions(tree, ClusterTrees.root(tree),
         root_state, nears, fars, root_level)
 
-    return nears, fars, block_tree
+    return nears, fars
 end
 
 
@@ -339,4 +344,27 @@ function clusterlink(tree::KMeansTree{D}, node=root(tree); target=1) where D
     Iterators.filter(
         n->tree.nodes[n].height==target, ClusterTrees.DepthFirstIterator(tree, node)
     )
+end
+
+
+function sort_interactions(
+    fars::Vector{Tuple{Int, Int}};
+    testortrial = 1
+)
+    
+    testortrial == 1 ? trialortest = 2 : trialortest = 1
+    
+    sortedfars = Tuple{Vector{Int}, Vector{Int}}[]
+    sfars = sort(fars, by = x -> x[testortrial])
+
+    push!(sortedfars, ([sfars[1][1]],[sfars[1][2]]))
+    for n ∈ 2:length(fars)
+        if sfars[n][testortrial] == sfars[n-1][testortrial]
+            push!(sortedfars[end][trialortest], sfars[n][trialortest])
+        else
+            push!(sortedfars, ([sfars[n][1]], [sfars[n][2]]))
+        end
+    end
+
+    return sortedfars
 end

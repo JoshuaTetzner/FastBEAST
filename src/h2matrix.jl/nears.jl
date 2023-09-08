@@ -3,7 +3,7 @@ using LinearMaps
 using ProgressMeter
 using Base.Threads
 
-function compute_nears(
+function getfullrankblocks(
     block_tree, 
     nears,
     assembler;
@@ -71,6 +71,7 @@ function fullmatrix(
     ::Type{I},
     ::Type{K};
 ) where {I, K}
+
     matrix = zeros(K, length(testnode), length(sourcenode))
     matrixassembler(matrix, testnode, sourcenode)
 

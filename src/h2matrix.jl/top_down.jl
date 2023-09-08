@@ -59,9 +59,8 @@ function row_top_down(
                     isassigned(
                         test_lowrankblocks, ClusterTrees.parent(block_tree.test_cluster, c)
                     )
-                    append!(col_set, test_lowrankblocks[
-                        ClusterTrees.parent(block_tree.test_cluster, c)
-                    ].M.σ)
+                    parent=ClusterTrees.parent(block_tree.test_cluster, c)
+                    append!(col_set, test_lowrankblocks[parent].σ[test_lowrankblocks[parent].M.σ])
                 end
                 test_lowrankblocks[c] = getcompressedmatrix(
                     row_set, col_set, matrixassembler, compressor=compressor

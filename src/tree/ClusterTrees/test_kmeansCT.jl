@@ -44,18 +44,16 @@ N =  10000
 points = [@SVector rand(3) for i = 1:N]
  
 @time tree = create_CT_tree(points, maxlevel=7)
-@time nears, fars, block_tree = computeinteractions(tree, tree)
+block_tree = ClusterTrees.BlockTrees.BlockTree(tree, tree)
+@time nears, fars = FastBEAST.computeinteractions(block_tree)
 x=1
 ##
-fars
-## benchmark
 
 @views OneoverRkernelassembler(matrix, tdata, sdata) = assembler(OneoverRkernel, matrix, points[tdata], points[sdata])
-tree = create_CT_tree(points, maxlevel=6)
-nears, fars, block_tree = computeinteractions(tree, tree)
-near_blocks = compute_nears(block_tree, nears, OneoverRkernelassembler)
-far_row_blocks = row_top_down(block_tree, fars, OneoverRkernelassembler)
-far_column_blocks = column_top_down(block_tree, fars, OneoverRkernelassembler)
+
+near_blocks = getfullrankblocks(block_tree, nears, OneoverRkernelassembler)
+@time far_row_blocks = row_top_down(block_tree, fars, OneoverRkernelassembler);
+@time far_column_blocks = column_top_down(block_tree, fars, OneoverRkernelassembler);
 test_basis, trial_basis = setup_nested_basis(far_row_blocks, far_column_blocks, block_tree)
 interactions = setup_interactions(far_row_blocks, far_column_blocks, OneoverRkernelassembler, fars, block_tree)
 ##
@@ -66,11 +64,12 @@ sol = collect(solutions)
 
 @time kmat = assembler(OneoverRkernel, points, points);
 function h2mat(points, OneoverRkernelassembler)
-    tree = create_CT_tree(points, maxlevel=6)
-    nears, fars, block_tree = computeinteractions(tree, tree)
-    near_blocks = compute_nears(block_tree, nears, OneoverRkernelassembler)
-    far_row_blocks = row_top_down(block_tree, fars, OneoverRkernelassembler)
-    far_column_blocks = column_top_down(block_tree, fars, OneoverRkernelassembler)
+    @time tree = create_CT_tree(points, maxlevel=7)
+    block_tree = ClusterTrees.BlockTrees.BlockTree(tree, tree)
+    @time nears, fars = FastBEAST.computeinteractions(block_tree)
+    near_blocks = getfullrankblocks(block_tree, nears, OneoverRkernelassembler)
+    @time far_row_blocks = row_top_down(block_tree, fars, OneoverRkernelassembler)
+    @time far_column_blocks = column_top_down(block_tree, fars, OneoverRkernelassembler)
     test_basis, trial_basis = setup_nested_basis(far_row_blocks, far_column_blocks, block_tree)
     interactions = setup_interactions(far_row_blocks, far_column_blocks, OneoverRkernelassembler, fars, block_tree)
 
@@ -116,3 +115,25 @@ M = vcat(teb[1]*i.M.T_U[1],teb[2]*i.M.T_U[2]) * i.M.Z * hcat(i.M.T_V[1]*trb[1], 
 norm(M-blk)/norm(blk)
 ##
 #
+
+
+
+
+
+##
+N =  10000
+
+@views OneoverRkernelassembler(matrix, tdata, sdata) = assembler(OneoverRkernel, matrix, points[tdata], points[sdata])
+points = [@SVector rand(3) for i = 1:N]
+ 
+@time tree = create_CT_tree(points, maxlevel=7)
+block_tree = ClusterTrees.BlockTrees.BlockTree(tree, tree)
+
+typeof(block_tree)
+
+@time H2Matrix(
+    OneoverRkernelassembler,
+    block_tree,
+    Int,
+    Float64
+    );
