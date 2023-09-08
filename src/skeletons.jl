@@ -1,21 +1,28 @@
 using LinearMaps
+
+
+# H-Matrix skeletons
 struct LowRankMatrix{F} <: LinearMaps.LinearMap{F}
     U::Matrix{F}
     V::Matrix{F}
     z::Vector{F}
 end
 
+
 function LowRankMatrix(U::T, V::T) where {F, T <: AbstractMatrix{F}}
     @assert size(V, 1) == size(U, 2)
     return LowRankMatrix{F}(U, V, zeros(F, size(U, 2)))
 end
 
+
 Base.size(lrm::LowRankMatrix) = (size(lrm.U,1), size(lrm.V,2))
+
 
 function LinearAlgebra.mul!(y::AbstractVecOrMat, M::LowRankMatrix, x::AbstractVector)
     mul!(M.z, M.V, x)
     mul!(y, M.U, M.z)
 end
+
 
 function LinearAlgebra.mul!(
     y::AbstractVecOrMat,
@@ -26,6 +33,7 @@ function LinearAlgebra.mul!(
     mul!(y, transpose(M.lmap.V), M.lmap.z)
 end
 
+
 function LinearAlgebra.mul!(
     y::AbstractVecOrMat,
     M::LinearMaps.AdjointMap{F, T},
@@ -34,11 +42,15 @@ function LinearAlgebra.mul!(
     mul!(M.lmap.z, adjoint(M.lmap.U), x)
     mul!(y, adjoint(M.lmap.V), M.lmap.z)
 end
+
+
+# Common skeletons
 struct MatrixBlock{I, F, T}
     M::T
     τ::Vector{I}
     σ::Vector{I}
 end
+
 
 function MatrixBlock(M::T, τ::Vector{I}, σ::Vector{I}) where {I, F, T <: AbstractMatrix{F}}
     MatrixBlock{I, F, T}(M, τ, σ)
@@ -48,6 +60,7 @@ Base.eltype(block::MatrixBlock{I, F, T}) where {I, F, T} = F
 Base.size(block::MatrixBlock) = (length(block.τ), length(block.σ))
 
 LinearAlgebra.rank(block::MatrixBlock) = size(block.M, 2)
+
 
 function nnz(lmrb::MatrixBlock{I, F, T}) where {I, F, T <: LowRankMatrix{F}}
     return size(lmrb.M.U, 1)*size(lmrb.M.U, 2) + size(lmrb.M.V, 1)*size(lmrb.M.V, 2)
