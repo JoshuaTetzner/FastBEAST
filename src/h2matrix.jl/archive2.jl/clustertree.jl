@@ -29,11 +29,11 @@ mutable struct LeafInteractions{}
     tnodes::Vector{FastBEAST.AbstractNode} 
 end
 
-struct MatrixBlock{I, F, T}
-    M::T
-    τ::Vector{I}
-    σ::Vector{I}
-end
+#struct MatrixBlock{I, F, T}
+#    M::T
+#    τ::Vector{I}
+#    σ::Vector{I}
+#end
 
 struct ClusterMatrix{F} <: LinearMaps.LinearMap{F}
     U::Matrix{F}

@@ -14,6 +14,11 @@ include("beast.jl")
 include("fmm/operators/FMMoperator.jl")
 include("tree/ClusterTrees/kmeansCT.jl")
 
+include("h2matrix.jl/h2matrix.jl")
+include("h2matrix.jl/fars_utils.jl")
+include("h2matrix.jl/nears.jl")
+include("aca/nca.jl")
+
 export BoundingBox
 export getboxframe
 export getchildbox
@@ -42,6 +47,11 @@ export hassemble
 export fmmassemble
 
 export create_CT_tree
+export value
 export computeinteractions
+
+##
+
+export nca
 
 end

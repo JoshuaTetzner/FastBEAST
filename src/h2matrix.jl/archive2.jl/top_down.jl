@@ -69,7 +69,7 @@ function row_top_down(
         end
     end
 
-    return test_lowrankblocks
+   # return test_lowrankblocks
 end
 
 

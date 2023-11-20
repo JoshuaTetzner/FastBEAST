@@ -1,288 +1,298 @@
-using LinearAlgebra
-using LinearMaps
-using ProgressMeter
-using SparseArrays
+using BEAST
 using FastBEAST
 using ClusterTrees
+using LinearMaps
 
-
-struct NestedMatrix{K}
-    M::Matrix{K}
-    cluster::Tuple{Int, Int}
+#storage for pivoting
+struct ClusterMatrix{F} <: LinearMaps.LinearMap{F}
+    U::Matrix{F}
+    V::Matrix{F}
     τ::Vector{Int}
     σ::Vector{Int}
 end
 
+Base.size(lrm::ClusterMatrix) = (size(lrm.U,1), size(lrm.V,2))
 
-struct NestedBasis{K}
-    M::Matrix{K}
-    children::Vector{Int}
+#storage for pivoting
+struct Pivotlrb{F}
+    M::ClusterMatrix{F} 
+    τ::Vector{Int}
+    σ::Vector{Int}
+    roworcolidcs::Vector{Int}
+    roworcolmap::Vector{UnitRange{Int}}
+    children::Vector{Tuple{Int, UnitRange{Int}}}
 end
 
+struct H2MatrixBlock{I, K}
+    Z::MatrixBlock{I, K, Matrix{K}}
+    row_basis::Vector{I}
+    col_basis::Vector{I}
+end
 
-isbasis(node::NestedMatrix) = (node.children == [])
-
+struct H2BasisBlock{I, K}
+    T::Union{Vector{Matrix{K}}, Matrix{K}}
+    children::Vector{I}
+end
 
 struct H2Matrix{I, K} <: LinearMaps.LinearMap{K}
     fullrankblocks::Vector{MatrixBlock{I, K, Matrix{K}}}
-    lowrankblocks::Vector{MatrixBlock{I, K, NestedMatrix{K}}}
-    nestedrows::Vector{NestedBasis{K}}
-    nestedcolumns::Vector{NestedBasis{K}}
+    lowrankblocks::Vector{H2MatrixBlock{I, K}}
+    nestedtestbases::Vector{H2BasisBlock{I, K}}
+    nestedtrialbases::Vector{H2BasisBlock{I, K}}
+    fars
     rowdim::I
     columndim::I
-    nnz::I
 end
-
-
-function nnz(hmat::H2T) where H2T <: H2Matrix
-    return hmat.nnz
-end
-
-
 function H2Matrix(
     matrixassembler::Function,
-    #h2assembler::Function,
     tree::ClusterTrees.BlockTrees.BlockTree{T},
-    ::Type{I},
-    ::Type{K};
-    farmatrixassembler=matrixassembler,
-    compressor=FastBEAST.ACAOptions(),
-    multithreading=false,
-    verbose=false
-) where {I, K, T}
-    
-    nears, fars = computeinteractions(tree)
-    
-    @time topdown_row_pivots(
-        tree,
-        fars,
-        matrixassembler,    
-        I,
-        K
+) where {T}
+
+    @time nears, fars = computeinteractions(tree)
+
+    @time fullrankblocks = getfullrankblocks(
+        tree, 
+        nears,
+        matrixassembler
     )
 
-    @time topdown_column_pivots(
-        tree,
-        fars,
-        matrixassembler,    
-        I,
-        K
-    )
+    @time test_fars = test_top_down_pivots(tree, fars, matrixassembler)
+    @time trial_fars = trial_top_down_pivots(tree, fars, matrixassembler)
 
-    #h2mat = h2setup( 
-    #    testmatrix, trialmatrix, testpivots, trialpivots, tree, nears, fars
-    #)
-end
-
-
-function h2setup(
-    testmatrix::SparseMatrixCSC{K, Int},
-    trialmatrix::SparseMatrixCSC{K, Int},
-    testpivots::Vector,
-    trialpivots::Vector,
-    tree::ClusterTrees.BlockTrees.BlockTree{T},
-    nears::Vector{Tuple{Int, Int}},
-    fars::Vector{Vector{Tuple{Int, Int}}},
+    lowrankblocks = Vector{H2MatrixBlock{Int, Float64}}(undef, sum([length(far) for far in fars]))
     
-) where {T, K}
-   
+    ind = 0
+    @time for levelfars in fars
+        for far in levelfars
+            ind += 1
+            row_children = [child[1] for child in test_fars[far[1]].children]
+            col_children = [child[1] for child in trial_fars[far[2]].children]
+            idx = findfirst(x->x==far[2], test_fars[far[1]].roworcolidcs)
+            range = test_fars[far[1]].roworcolmap[idx]
+            
+            lowrankblocks[ind] = H2MatrixBlock(
+                MatrixBlock(
+                    test_fars[far[1]].M.V[:, range][:, trial_fars[far[2]].M.σ],
+                    test_fars[far[1]].τ[test_fars[far[1]].M.τ],
+                    trial_fars[far[2]].σ[trial_fars[far[2]].M.σ]
+                ),
+                row_children,
+                col_children
+            )
+        end
+    end
 
+    level = []
+    for (i, far) in enumerate(fars[1:end-1])
+        if far != []
+            push!(level, i)
+        end
+    end
 
+    @time test_basis = build_test_bases(tree.test_cluster, fars, level, test_fars)
+    @time trial_basis = build_trial_bases(tree.trial_cluster, fars, level, trial_fars)
+    rowdim = length(value(tree.test_cluster, 1))
+    coldim = length(value(tree.trial_cluster, 1))
+    return H2Matrix(
+        fullrankblocks, lowrankblocks, test_basis, trial_basis, fars, rowdim, coldim
+    )
 end
 
 
-struct H2Pivots
-    τᵥ::Vector{Int}
-    σᵤ::Vector{Int}
-    σ::Vector{Int}
-    τ::Vector{Int}
+function build_test_bases(
+    tree::KMeansTree{T},
+    fars,
+    levels,
+    test_fars
+) where T
+
+    maxlevel = length(tree.levels)
+    test_basis = Vector{H2BasisBlock{Int, Float64}}(undef, length(tree.nodes))
+
+    ## nested test basis
+    for nodeidx in FastBEAST.clusterlink(tree, node=root(tree), target=maxlevel)
+        test_basis[nodeidx] = H2BasisBlock(
+            test_fars[nodeidx].M.U * test_fars[nodeidx].M.U[test_fars[nodeidx].M.τ, :]',
+            Int[]
+        )
+    end
+    
+    #transfer matrices
+    for level in Iterators.reverse(levels)
+        sfars = sort_interactions(fars[level], testortrial=1)
+        for (nodeidx, _) in sfars
+            transfer = Vector{Matrix{Float64}}(undef, length(test_fars[nodeidx[1]].children))
+            children = zeros(Int, length(test_fars[nodeidx[1]].children))
+
+            for (ind, (child, range)) in enumerate(test_fars[nodeidx[1]].children)
+                transfer[ind] = test_fars[nodeidx[1]].M.U[range, :][test_fars[child].M.τ, :] * 
+                    test_fars[nodeidx[1]].M.U[test_fars[nodeidx[1]].M.τ, :]'
+                children[ind] = child
+            end
+            test_basis[nodeidx[1]] = H2BasisBlock(
+                transfer,
+                children
+            )
+        end
+
+    end
+
+    return test_basis
 end
 
 
-function topdown_row_pivots(
+function build_trial_bases(
+    tree::KMeansTree{T},
+    fars,
+    levels,
+    trial_fars
+) where T
+
+    maxlevel = length(tree.levels)
+    trial_basis = Vector{H2BasisBlock{Int, Float64}}(undef, length(tree.nodes))
+
+    ## nested test basis
+    for nodeidx in FastBEAST.clusterlink(tree, node=root(tree), target=maxlevel)
+        trial_basis[nodeidx] = H2BasisBlock(
+            trial_fars[nodeidx].M.V[:, trial_fars[nodeidx].M.σ]' * trial_fars[nodeidx].M.V,
+            Int[]
+        )
+    end
+    
+    #transfer matrices
+    for level in Iterators.reverse(levels)
+        sfars = sort_interactions(fars[level], testortrial=2)
+        for (_, nodeidx) in sfars
+            transfer = Vector{Matrix{Float64}}(undef, length(trial_fars[nodeidx[1]].children))
+            children = zeros(Int, length(trial_fars[nodeidx[1]].children))
+
+            for (ind, (child, range)) in enumerate(trial_fars[nodeidx[1]].children)
+                transfer[ind] = trial_fars[nodeidx[1]].M.V[:, trial_fars[nodeidx[1]].M.σ]' * 
+                    trial_fars[nodeidx[1]].M.V[:, range][:, trial_fars[child].M.σ] 
+                    
+                children[ind] = child
+            end
+            trial_basis[nodeidx[1]] = H2BasisBlock(
+                transfer,
+                children
+            )
+        end
+
+    end
+
+    return trial_basis
+end
+
+
+function test_top_down_pivots(
     block_tree::ClusterTrees.BlockTrees.BlockTree{T},
     fars,
-    matrixassembler,    
-    ::Type{I},
-    ::Type{K};
+    matrixassembler;
     compressor=FastBEAST.ACAOptions(tol=1e-4)
-) where {I, K, T}
+) where T
 
-    test_pivots = Vector{H2Pivots}(undef, length(block_tree.test_cluster.nodes))
-    test_matrix = spzeros(
-        K, block_tree.test_cluster.num_elements, block_tree.test_cluster.num_elements
-    )
+    test_lowrankblocks = Vector{Pivotlrb{Float64}}(undef, length(block_tree.test_cluster.nodes))
 
     for level_fars in fars
         if level_fars != []
 
-            sorted_fars = FastBEAST.sort_interactions(level_fars, testortrial=1)
+            sorted_fars = sort_interactions(level_fars, testortrial=1)
+            
             for sfar in sorted_fars
                 c = sfar[1][1]
-                row_idcs = FastBEAST.value(block_tree.test_cluster, c)
-                col_idcs = Int[]
+                childidcs = FastBEAST.childidcs(block_tree.test_cluster, c)
+                childrange = Tuple{Int, UnitRange{Int}}[]
+                if ClusterTrees.haschildren(block_tree.test_cluster, c)
+                    childidcs = FastBEAST.childidcs(block_tree.test_cluster, c)
+                    
+                    idxcounter = 1
+                    for childidx in childidcs
+                        push!(childrange, (childidx, idxcounter:(idxcounter+length(value(block_tree.test_cluster, childidx))-1)))
+                        idxcounter += length(value(block_tree.test_cluster, childidx))
+                    end
+                end
+
+                row_set = value(block_tree.test_cluster, c)
+                col_set = Int[]
+                colmaps = UnitRange{Int}[]
+                idx = 1
 
                 for adm_blk in sfar[2]
-                    append!(col_idcs, FastBEAST.value(block_tree.trial_cluster, adm_blk))
+                    append!(col_set, value(block_tree.trial_cluster, adm_blk))
+                    push!(colmaps, idx:(idx+length(value(block_tree.trial_cluster, adm_blk))-1))
+                    idx += length(value(block_tree.trial_cluster, adm_blk))
                 end
                 
                 if ClusterTrees.parent(block_tree.test_cluster, c) != 0 &&
                     isassigned(
-                        test_pivots, ClusterTrees.parent(block_tree.test_cluster, c)
+                        test_lowrankblocks, ClusterTrees.parent(block_tree.test_cluster, c)
                     )
                     parent = ClusterTrees.parent(block_tree.test_cluster, c)
-                    append!(col_idcs, test_pivots[parent].σᵤ)
+                    append!(col_set, test_lowrankblocks[parent].σ[test_lowrankblocks[parent].M.σ])
                 end
-                
-
-                compress_r_blk!(
-                    c,
-                    row_idcs,
-                    col_idcs,
-                    test_pivots,
-                    test_matrix,
-                    matrixassembler,
-                    compressor=compressor
-                ) 
+                test_lowrankblocks[c] = getcompressedmatrix(
+                    row_set, col_set, sfar[2],colmaps, childrange, matrixassembler, compressor=compressor
+                )
             end
         end
     end
 
-    return test_pivots, test_matrix
+    return test_lowrankblocks
 end
 
 
-function topdown_column_pivots(
+function trial_top_down_pivots(
     block_tree::ClusterTrees.BlockTrees.BlockTree{T},
     fars,
-    matrixassembler,    
-    ::Type{I},
-    ::Type{K};
+    matrixassembler;
     compressor=FastBEAST.ACAOptions(tol=1e-4)
-) where {I, K, T}
+) where T
 
-    trial_pivots = Vector{H2Pivots}(undef, length(block_tree.test_cluster.nodes))
-    trial_matrix = spzeros(
-        K, block_tree.test_cluster.num_elements, block_tree.test_cluster.num_elements
-    )
+    trial_lowrankblocks = Vector{Pivotlrb{Float64}}(undef, length(block_tree.trial_cluster.nodes))
 
     for level_fars in fars
         if level_fars != []
 
             sorted_fars = sort_interactions(level_fars, testortrial=2)
+            
             for sfar in sorted_fars
                 c = sfar[2][1]
-                col_idcs = value(block_tree.trial_cluster, c)
-                row_idcs = Int[]
-                
+                childidcs = FastBEAST.childidcs(block_tree.trial_cluster, c)
+                childrange = Tuple{Int, UnitRange{Int}}[]
+                if ClusterTrees.haschildren(block_tree.trial_cluster, c)
+                    childidcs = FastBEAST.childidcs(block_tree.trial_cluster, c)
+                    
+                    idxcounter = 1
+                    for childidx in childidcs
+                        push!(childrange, (childidx, idxcounter:(idxcounter+length(value(block_tree.trial_cluster, childidx))-1)))
+                        idxcounter += length(value(block_tree.trial_cluster, childidx))
+                    end
+                end
+
+                col_set = value(block_tree.trial_cluster, c)
+                row_set = Int[]
+                rowmaps = UnitRange{Int}[]
+                idx = 1
 
                 for adm_blk in sfar[1]
-                    append!(row_idcs, value(block_tree.test_cluster, adm_blk))
+                    append!(row_set, value(block_tree.test_cluster, adm_blk))
+                    push!(rowmaps, idx:(idx+length(value(block_tree.test_cluster, adm_blk))-1))
+                    idx += length(value(block_tree.test_cluster, adm_blk))
                 end
                 
                 if ClusterTrees.parent(block_tree.trial_cluster, c) != 0 &&
                     isassigned(
-                        trial_pivots, ClusterTrees.parent(block_tree.trial_cluster, c)
+                        trial_lowrankblocks, ClusterTrees.parent(block_tree.trial_cluster, c)
                     )
-                    
-                    append!(row_idcs, trial_pivots[
-                        ClusterTrees.parent(block_tree.trial_cluster, c)
-                    ].τᵥ)
+                    parent = ClusterTrees.parent(block_tree.trial_cluster, c)
+                    append!(row_set, trial_lowrankblocks[parent].τ[trial_lowrankblocks[parent].M.τ])
                 end
-
-                compress_c_blk!(
-                    c,
-                    row_idcs,
-                    col_idcs,
-                    trial_pivots,
-                    trial_matrix,
-                    matrixassembler,
-                    compressor=compressor
-                ) 
+                trial_lowrankblocks[c] = getcompressedmatrix(
+                    row_set, col_set, sfar[1], rowmaps, childrange, matrixassembler, compressor=compressor
+                )
             end
         end
     end
 
-    return trial_pivots, trial_matrix
-end
-
-function compress_c_blk!(
-    block_idx::Int,
-    row_idcs::Vector{Int},
-    col_idcs::Vector{Int},
-    pivots::Vector{H2Pivots},
-    matrix::SparseMatrixCSC{K, Int64},
-    matrixassembler;
-    compressor=FastBEAST.ACAOptions(tol=1e-4)
-) where K
-
-    lm = FastBEAST.LazyMatrix(
-        matrixassembler,
-        row_idcs,
-        col_idcs,
-        Float64
-    )
-
-    maxrank = Int(round(
-        length(row_idcs) * length(col_idcs)/(length(row_idcs) + length(col_idcs))))
-
-    am = allocate_aca_memory(
-        K,
-        length(row_idcs),
-        length(col_idcs),
-        maxrank=maxrank
-    )
-
-    retU, retV, U, V, τᵥ, σᵤ = nca(
-        lm,
-        am;
-        rowpivstrat=compressor.rowpivstrat,
-        columnpivstrat=compressor.columnpivstrat,
-        tol=compressor.tol,
-        svdrecompress=compressor.svdrecompress
-    )
-
-    pivots[block_idx] = H2Pivots(τᵥ, σᵤ, row_idcs, col_idcs)
-    matrix[τᵥ, col_idcs] = V
-end
-
-
-function compress_r_blk!(
-    block_idx::Int,
-    row_idcs::Vector{Int},
-    col_idcs::Vector{Int},
-    pivots::Vector{H2Pivots},
-    matrix::SparseMatrixCSC{K, Int64},
-    matrixassembler;
-    compressor=FastBEAST.ACAOptions(tol=1e-4)
-) where K
-
-    lm = FastBEAST.LazyMatrix(
-        matrixassembler,
-        row_idcs,
-        col_idcs,
-        Float64
-    )
-
-    maxrank = Int(round(
-        length(row_idcs) * length(col_idcs)/(length(row_idcs) + length(col_idcs))))
-
-    am = allocate_aca_memory(
-        K,
-        length(row_idcs),
-        length(col_idcs),
-        maxrank=maxrank
-    )
-
-    retU, retV, U, V, τᵥ, σᵤ = nca(
-        lm,
-        am;
-        rowpivstrat=compressor.rowpivstrat,
-        columnpivstrat=compressor.columnpivstrat,
-        tol=compressor.tol,
-        svdrecompress=compressor.svdrecompress
-    )
-
-    pivots[block_idx] = H2Pivots(τᵥ, σᵤ, row_idcs, col_idcs)
-    matrix[row_idcs, σᵤ] = U
+    return trial_lowrankblocks
 end

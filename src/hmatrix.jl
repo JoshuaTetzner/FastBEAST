@@ -529,7 +529,3 @@ function getcompressedmatrix(
 
     return mbl
 end
-
-##
-
-real(ComplexF64)

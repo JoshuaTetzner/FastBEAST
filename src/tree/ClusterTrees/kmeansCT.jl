@@ -63,7 +63,7 @@ function rootstate(tree::KMeansTree, destination)
 end
 
 
-function value(tree, node::Int) where D
+function value(tree, node::Int)
 
     if !ClusterTrees.haschildren(tree, node)
         return tree.nodes[node].node.data.values
@@ -79,6 +79,29 @@ function value(tree, node::Int) where D
     end
 end
 
+function indexedvalue(tree, node::Int)
+
+    if !ClusterTrees.haschildren(tree, node)
+        return tree.nodes[node].node.data.values
+    else
+        values = Int[]
+        indices = Tuple{Int, UnitRange{Int}}[]
+        startind = 1
+        for leaf ∈ ClusterTrees.leaves(tree, node)
+            append!(
+                values,
+                tree.nodes[leaf].node.data.values
+            )
+
+            push!(
+                indices, 
+                (leaf, startind:(startind + length(tree.nodes[leaf].node.data.values) - 1))
+            )
+            startind += (length(tree.nodes[leaf].node.data.values))
+        end
+        return values, indices
+    end
+end
 
 function child!(
     tree::KMeansTree{D}, state, destination
@@ -340,7 +363,7 @@ function computeinteractions(tree::ClusterTrees.BlockTrees.BlockTree{T}) where T
 end
 
 
-function clusterlink(tree::KMeansTree{D}, node=root(tree); target=1) where D
+function clusterlink(tree::KMeansTree{D}; node=root(tree), target=1) where D
     Iterators.filter(
         n->tree.nodes[n].height==target, ClusterTrees.DepthFirstIterator(tree, node)
     )
@@ -367,4 +390,23 @@ function sort_interactions(
     end
 
     return sortedfars
+end
+
+
+function childidcs(
+    tree::FastBEAST.KMeansTree{FastBEAST.Data{F, I}},
+    nodeidx::I
+) where {F, I}
+
+    !ClusterTrees.haschildren(tree, nodeidx) && return 0
+
+    
+    nextchild = ClusterTrees.PointerBasedTrees.firstchild(tree, nodeidx)
+    childidcs = Int[]
+    while nextchild != 0 
+        push!(childidcs, nextchild)
+        nextchild = ClusterTrees.PointerBasedTrees.nextsibling(tree, nextchild)
+    end
+
+    return childidcs
 end

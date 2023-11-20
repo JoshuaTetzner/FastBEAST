@@ -32,7 +32,9 @@ function getfullrankblocks(
             )
             verbose && next!(p)
         end
+
     elseif multithreading
+        
         for i in 1:Threads.nthreads()
             push!(nearblocks_perthread, MBF[])
             push!(nonzeros_perthread, 0)
