@@ -25,8 +25,10 @@ end
 
 struct H2MatrixBlock{I, K}
     Z::MatrixBlock{I, K, Matrix{K}}
-    row_basis::Vector{I}
-    col_basis::Vector{I}
+    τ::Vector{I}
+    σ::Vector{I}
+    row_basis::I#Vector{I}
+    col_basis::I#Vector{I}
 end
 
 struct H2BasisBlock{I, K}
@@ -48,9 +50,9 @@ function H2Matrix(
     tree::ClusterTrees.BlockTrees.BlockTree{T},
 ) where {T}
 
-    @time nears, fars = computeinteractions(tree)
+    nears, fars = computeinteractions(tree)
 
-    @time fullrankblocks = getfullrankblocks(
+    fullrankblocks = getfullrankblocks(
         tree, 
         nears,
         matrixassembler
@@ -62,11 +64,11 @@ function H2Matrix(
     lowrankblocks = Vector{H2MatrixBlock{Int, Float64}}(undef, sum([length(far) for far in fars]))
     
     ind = 0
-    @time for levelfars in fars
+    for levelfars in fars
         for far in levelfars
             ind += 1
-            row_children = [child[1] for child in test_fars[far[1]].children]
-            col_children = [child[1] for child in trial_fars[far[2]].children]
+            #row_children = [child[1] for child in test_fars[far[1]].children]
+            #col_children = [child[1] for child in trial_fars[far[2]].children]
             idx = findfirst(x->x==far[2], test_fars[far[1]].roworcolidcs)
             range = test_fars[far[1]].roworcolmap[idx]
             
@@ -76,8 +78,10 @@ function H2Matrix(
                     test_fars[far[1]].τ[test_fars[far[1]].M.τ],
                     trial_fars[far[2]].σ[trial_fars[far[2]].M.σ]
                 ),
-                row_children,
-                col_children
+                test_fars[far[1]].τ,
+                trial_fars[far[2]].σ,
+                far[1],#row_children,
+                far[2]#col_children
             )
         end
     end
@@ -89,8 +93,8 @@ function H2Matrix(
         end
     end
 
-    @time test_basis = build_test_bases(tree.test_cluster, fars, level, test_fars)
-    @time trial_basis = build_trial_bases(tree.trial_cluster, fars, level, trial_fars)
+    test_basis = build_test_bases(tree.test_cluster, fars, level, test_fars)
+    trial_basis = build_trial_bases(tree.trial_cluster, fars, level, trial_fars)
     rowdim = length(value(tree.test_cluster, 1))
     coldim = length(value(tree.trial_cluster, 1))
     return H2Matrix(
@@ -112,7 +116,7 @@ function build_test_bases(
     ## nested test basis
     for nodeidx in FastBEAST.clusterlink(tree, node=root(tree), target=maxlevel)
         test_basis[nodeidx] = H2BasisBlock(
-            test_fars[nodeidx].M.U * test_fars[nodeidx].M.U[test_fars[nodeidx].M.τ, :]',
+            test_fars[nodeidx].M.U * test_fars[nodeidx].M.U[test_fars[nodeidx].M.τ, :]^-1,
             Int[]
         )
     end
@@ -126,7 +130,7 @@ function build_test_bases(
 
             for (ind, (child, range)) in enumerate(test_fars[nodeidx[1]].children)
                 transfer[ind] = test_fars[nodeidx[1]].M.U[range, :][test_fars[child].M.τ, :] * 
-                    test_fars[nodeidx[1]].M.U[test_fars[nodeidx[1]].M.τ, :]'
+                    test_fars[nodeidx[1]].M.U[test_fars[nodeidx[1]].M.τ, :]^-1
                 children[ind] = child
             end
             test_basis[nodeidx[1]] = H2BasisBlock(
@@ -154,7 +158,7 @@ function build_trial_bases(
     ## nested test basis
     for nodeidx in FastBEAST.clusterlink(tree, node=root(tree), target=maxlevel)
         trial_basis[nodeidx] = H2BasisBlock(
-            trial_fars[nodeidx].M.V[:, trial_fars[nodeidx].M.σ]' * trial_fars[nodeidx].M.V,
+            trial_fars[nodeidx].M.V[:, trial_fars[nodeidx].M.σ]^-1 * trial_fars[nodeidx].M.V,
             Int[]
         )
     end
@@ -167,7 +171,7 @@ function build_trial_bases(
             children = zeros(Int, length(trial_fars[nodeidx[1]].children))
 
             for (ind, (child, range)) in enumerate(trial_fars[nodeidx[1]].children)
-                transfer[ind] = trial_fars[nodeidx[1]].M.V[:, trial_fars[nodeidx[1]].M.σ]' * 
+                transfer[ind] = trial_fars[nodeidx[1]].M.V[:, trial_fars[nodeidx[1]].M.σ]^-1 * 
                     trial_fars[nodeidx[1]].M.V[:, range][:, trial_fars[child].M.σ] 
                     
                 children[ind] = child

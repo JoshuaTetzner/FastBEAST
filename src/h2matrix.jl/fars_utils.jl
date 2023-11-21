@@ -64,7 +64,7 @@ function getcompressedmatrix(
     )
 
     return FastBEAST.Pivotlrb{Float64}(
-        ClusterMatrix(retU, retV, rowindices, colindices),    
+        ClusterMatrix(U, V, rowindices, colindices),    
         test_idcs,
         trial_idcs,
         roworcolidcs,
