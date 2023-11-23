@@ -102,6 +102,12 @@ function partialACA(
     (maxrows, maxcolumns) = size(M)
 
     rowpivstrat, nextrow = FastBEAST.firstindex(rowpivstrat, M.τ)
+    column = FastBEAST.pivoting(
+        rowpivstrat,
+        abs.(am.V[am.Ic, 1:maxcolumns]),
+        am.used_J[1:maxcolumns],
+        M.σ
+    )
     am.used_I[nextrow] = true
 
     for i = 1:10
