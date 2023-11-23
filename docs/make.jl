@@ -16,7 +16,7 @@ makedocs(
 
 deploydocs(
     repo = "github.com/JoshuaTetzner/FastBEAST.git",
-    devbranch = "bugfix/documentation",
+    devbranch = "bugfix/documantation",
     versions = nothing,
 )
 
