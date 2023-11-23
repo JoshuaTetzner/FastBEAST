@@ -9,7 +9,8 @@ makedocs(
         "Manual" => Any[
             "man/clustering.md",
             "man/hmatrix.md",
-            "man/aca.md"
+            "man/fmm.md",
+            "man/aca.md",
         ],
         "Types and Functions" => "functions.md"
 ])
