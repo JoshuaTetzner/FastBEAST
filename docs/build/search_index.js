@@ -1,3 +1,0 @@
-var documenterSearchIndex = {"docs":
-[{"location":"#FastBEAST.jl","page":"Home","title":"FastBEAST.jl","text":"","category":"section"},{"location":"","page":"Home","title":"Home","text":"Test the Documenter.","category":"page"},{"location":"#Package-Features","page":"Home","title":"Package Features","text":"","category":"section"},{"location":"","page":"Home","title":"Home","text":"Fast linear Algebra","category":"page"},{"location":"#Function-Documentation","page":"Home","title":"Function Documentation","text":"","category":"section"},{"location":"","page":"Home","title":"Home","text":"    a = bx+c","category":"page"}]
-}
