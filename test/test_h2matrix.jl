@@ -89,7 +89,6 @@ function compression(h2mat::FastBEAST.H2Matrix{I, K}) where {I, K}
 
 end
 
-
 function compression(hmat::HT) where HT <: HMatrix
     fullsize = hmat.rowdim*hmat.columndim
     return nnz(hmat)/fullsize
@@ -130,60 +129,21 @@ end
 
 ##
 
-N =  25000
+N = 10000
 points = [@SVector rand(3) for i = 1:N]
 
 @views OneoverRkernelassembler(matrix, tdata, sdata) = assembler(OneoverRkernel, matrix, points[tdata], points[sdata])
 
 fmat = assembler(OneoverRkernel, points, points)
 ##
-@time tree = create_CT_tree(points, maxlevel=8)
+@time tree = create_CT_tree(points, nchildren=8, nmin=200, maxlevel=7);
 block_tree = ClusterTrees.BlockTrees.BlockTree(tree, tree)
+#nears, fars = computeinteractions(block_tree)
 
+##
 @time h2mat = FastBEAST.H2Matrix(OneoverRkernelassembler, block_tree);
 
-##
 compression(h2mat)
 ##
-stree = create_tree(points, KMeansTreeOptions(nmin=50))
-ttree = create_tree(points, KMeansTreeOptions(nmin=50))
-@time hmat = HMatrix(
-    OneoverRkernelassembler,
-    ttree,
-    stree,
-    Int64,
-    Float64,
-    compressor=FastBEAST.ACAOptions(tol=1e-4)
-)
-
-compression(hmat)
-
-##
-N=1000
-blk = rand(N, N)
-U,S,V = svd(blk)
-S = [ i < 40 ? 10.0^(-i) : 0.0 for i = 1:N ]
-blk = U*diagm(S)*V'
-
-r = rand(1:N, 20)
-c = rand(1:N, 20)
-_,svfull, _ = svd(blk)
-svfull
-
-_,sv, _ = svd(blk[r, c])
-
-sv./sv[1]
-
-sblk = blk[r, c]
-
-s1 = sblk[1, 1]./sblk[1, 1] 
-s2 = (sblk[2, 2] - sblk[2, 1]*(1/sblk[2, 1])*sblk[1, 2])./sblk[1, 1]
-
-length(rand(10, 10))
-
-
-##
-a = Vector{FastBEAST.H2Matrix{Int, Float64}}(undef, 10)
-
-if isdefined(a, 1)
-end
+fh2mat = (fullmat(h2mat))
+norm(fh2mat-fmat)/norm(fh2mat)

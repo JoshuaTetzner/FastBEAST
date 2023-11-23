@@ -89,11 +89,14 @@ function nca(
     svdrecompress=true
 ) where {I, F, K}
 
+    
 
     U = zeros(K, size(am.U)[1], size(am.U)[2])
     V = zeros(K, size(am.V)[1], size(am.V)[2])
     rowindices = Int[]
     colindices = Int[]
+    #println(size(U))
+    #println(size(V))
 
     randconv = initconvergence(M)
     maxrowcols = 1
@@ -255,11 +258,11 @@ function nca(
         println("WARNING: aborted ACA after maximum effective rank: ", FastBEAST.maxrank(am))
     end
 
-    if false rowpivstrat isa FastBEAST.MRFPivoting && rowpivstrat.uselessupdate
-        #println("uselessupdate")
-        am.Ic -= 1
-        am.Jc -= 1
-    end
+    #if false rowpivstrat isa FastBEAST.MRFPivoting && rowpivstrat.uselessupdate
+    #    #println("uselessupdate")
+    #    am.Ic -= 1
+    #    am.Jc -= 1
+    #end
 
     if svdrecompress && am.Jc > 1
         @views Q,R = qr(am.U[1:maxrows,1:am.Jc])

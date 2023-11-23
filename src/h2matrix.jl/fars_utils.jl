@@ -38,14 +38,17 @@ function getcompressedmatrix(
     matrixassembler;
     compressor=FastBEAST.ACAOptions(tol=1e-4)
 )
+
     lm = FastBEAST.LazyMatrix(
         matrixassembler,
         test_idcs,
         trial_idcs,
         Float64
     )
-    maxrank = Int(round(
-        length(test_idcs) * length(trial_idcs)/(length(test_idcs) + length(trial_idcs))))
+    maxrank = max(Int(round(
+        length(test_idcs) * length(trial_idcs)/(length(test_idcs) + length(trial_idcs)))),
+        1
+    )
 
     am = allocate_aca_memory(
         Float64,

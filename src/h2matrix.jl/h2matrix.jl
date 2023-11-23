@@ -234,6 +234,7 @@ function test_top_down_pivots(
                     parent = ClusterTrees.parent(block_tree.test_cluster, c)
                     append!(col_set, test_lowrankblocks[parent].σ[test_lowrankblocks[parent].M.σ])
                 end
+
                 test_lowrankblocks[c] = getcompressedmatrix(
                     row_set, col_set, sfar[2],colmaps, childrange, matrixassembler, compressor=compressor
                 )
@@ -291,6 +292,7 @@ function trial_top_down_pivots(
                     parent = ClusterTrees.parent(block_tree.trial_cluster, c)
                     append!(row_set, trial_lowrankblocks[parent].τ[trial_lowrankblocks[parent].M.τ])
                 end
+
                 trial_lowrankblocks[c] = getcompressedmatrix(
                     row_set, col_set, sfar[1], rowmaps, childrange, matrixassembler, compressor=compressor
                 )

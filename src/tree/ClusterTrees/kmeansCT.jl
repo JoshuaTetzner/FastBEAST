@@ -79,6 +79,7 @@ function value(tree, node::Int)
     end
 end
 
+
 function indexedvalue(tree, node::Int)
 
     if !ClusterTrees.haschildren(tree, node)
@@ -103,11 +104,12 @@ function indexedvalue(tree, node::Int)
     end
 end
 
+
 function child!(
     tree::KMeansTree{D}, state, destination
 ) where D 
         
-    maxlevel, num_children, points, kmeans_sttings = destination
+    maxlevel, num_children, points, kmeans_sttings, nmin = destination
     parent_node_idx, level, sibling_idx, point_idcs = state
 
     kmcluster = ParallelKMeans.kmeans(
@@ -130,7 +132,14 @@ function child!(
             kmcluster.centers[:, 1]
     )))
 
-    if level < maxlevel
+    isnmin = true
+    for sidx in 1:num_children
+        isnmin = isnmin && 
+            length(sorted_point_idcs[2:(sorted_point_idcs[1, 1] + 1), sidx]) <= nmin
+    end
+
+    #check if maximum depth is reached
+    if level < maxlevel && !isnmin
         push!(tree.nodes, KMNode(ClusterTrees.PointerBasedTrees.Node(
             Data(center, radius, Int[]),
             num_children,
@@ -153,7 +162,6 @@ function child!(
             kmcluster
         )
         tree.nodes[node_idx].node.next_sibling = sibling!(tree, state_sibling, destination) 
-
 
         # Check if more than one node is left
         sorted_point_idcs[1,1] == 1 && return node_idx
@@ -195,7 +203,7 @@ function sibling!(
     tree::KMeansTree{D}, state, destination
 ) where D
         
-    maxlevel, num_children, points, kmeans_sttings = destination
+    maxlevel, num_children, points, kmeans_sttings, nmin = destination
     parent_node_idx, level, sibling_idx, point_idcs, sorted_point_idcs, kmcluster = state
 
     # Enough siblings?
@@ -207,8 +215,14 @@ function sibling!(
         ] .- kmcluster.centers[:, sibling_idx]
     )))
 
-    # Check if maximum tree depth is reached
-    if level < maxlevel
+    isnmin = true
+    for sidx in 1:num_children
+        isnmin = isnmin && 
+            length(sorted_point_idcs[2:(sorted_point_idcs[1, 1] + 1), sidx]) <= nmin
+    end
+
+    #check if maximum depth is reached
+    if level < maxlevel && !isnmin
         push!(tree.nodes, KMNode(ClusterTrees.PointerBasedTrees.Node(
             Data(center, radius, Int[]),
             num_children,
@@ -318,6 +332,7 @@ end
 function create_CT_tree(
     points::Vector{SVector{3, F}};
     maxlevel=5,
+    nmin=100,
     nchildren=2,
     kmeans_settings=KMeansSettings()
 ) where F <: Real
@@ -328,7 +343,7 @@ function create_CT_tree(
     )
 
     tree = KMeansTree(length(points))
-    destination = (maxlevel, nchildren, pointsM, kmeans_settings)
+    destination = (maxlevel, nchildren, pointsM, kmeans_settings, nmin)
     state = (1, 2, 1, Vector(1:length(points)))
     child!(tree, state, destination)
     tree.nodes[1].node.first_child = 2
