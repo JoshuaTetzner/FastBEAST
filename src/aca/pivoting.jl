@@ -26,6 +26,15 @@ function firstindex(strat::MaxPivoting{I}, totalindices) where I
     return strat, strat.firstindex
 end
 
+function firstindex(
+    strat::MaxPivoting{I},
+    roworcolumn,
+    totalindices
+) where {I}
+
+        return strat, argmin(roworcolumn)
+end
+
 """ 
     function pivoting(
         strat::MaxPivoting{I},
@@ -90,7 +99,46 @@ basis function closest to the center of the distribution.
 basis functions/positions used for pivoting.
 
 """
-function firstindex(strat::FillDistance{I, F}, globalindices) where {I, F}
+function firstindex(strat::FillDistance{I, F}, globalindices) where {I, F, K}
+
+    nglobalindices = length(globalindices)
+    distances = zeros(F, nglobalindices)
+    dist = zeros(Float64, nglobalindices)
+
+    firstlocalindex = 1
+
+    for l = 1:nglobalindices
+        dist[l] = norm(
+            strat.loc[globalindices[l]] - strat.loc[globalindices[firstlocalindex]]
+        )
+    end
+
+    maxdist = maximum(dist)
+
+    for l = 2:nglobalindices
+        for ll = 1:nglobalindices
+            if maxdist < norm(strat.loc[globalindices[l]] - strat.loc[globalindices[ll]])
+                distances[ll] = norm(
+                    strat.loc[globalindices[l]] - strat.loc[globalindices[ll]]
+                )
+                break
+            else
+                distances[ll] = norm(
+                    strat.loc[globalindices[l]] - strat.loc[globalindices[ll]]
+                )
+            end
+        end
+        if maximum(distances) < maximum(dist)
+            maxdist = maximum(distances)
+            firstlocalindex = l
+            dist .= distances
+        end
+    end
+
+    return FillDistance(strat.loc[globalindices], dist), firstlocalindex
+end
+
+function firstindex(strat::FillDistance{I, F}, am, globalindices) where {I, F, K}
 
     nglobalindices = length(globalindices)
     distances = zeros(F, nglobalindices)
