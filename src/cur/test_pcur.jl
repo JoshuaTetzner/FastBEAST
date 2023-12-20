@@ -44,14 +44,17 @@ end
 piv = FastBEAST.FillDistance(tp)
 rows, cols, V = pcur(
     fct, Vector(1:size(A, 1)), Vector(1:size(A, 2)), rowpivstrat=piv)
-V[1:10, :]
+V
+
+##
+    V[1:10, :]
 V[7, :]
 V[8, :]
 
 lm = LazyMatrix(fct, Vector(1:size(A, 1)), Vector(1:size(A, 2)), Float64)
 U, V2 = aca(lm, rowpivstrat=piv, svdrecompress=false, tol=1e-4)
-V2
-U
+norm(V2[5,:])
+norm(U[:,5])
 V[3, :]
 ##
 
