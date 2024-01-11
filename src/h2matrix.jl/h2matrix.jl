@@ -2,6 +2,7 @@ using BEAST
 using FastBEAST
 using ClusterTrees
 using LinearMaps
+using FastLowRankCompression
 
 #storage for pivoting
 struct ClusterMatrix{F} <: LinearMaps.LinearMap{F}
@@ -48,6 +49,8 @@ end
 function H2Matrix(
     matrixassembler::Function,
     tree::ClusterTrees.BlockTrees.BlockTree{T},
+    rowpos::Vector{SVector{3, Float64}},
+    colpos::Vector{SVector{3, Float64}}
 ) where {T}
 
     nears, fars = computeinteractions(tree)
@@ -57,9 +60,13 @@ function H2Matrix(
         nears,
         matrixassembler
     )
-
-    @time test_fars = test_top_down_pivots(tree, fars, matrixassembler)
-    @time trial_fars = trial_top_down_pivots(tree, fars, matrixassembler)
+    compressor = FastLowRankCompression.ACAOptions(
+        rowpivstrat=FastLowRankCompression.ModifiedFillDistance(rowpos),
+        columnpivstrat=FastLowRankCompression.ModifiedFillDistance(colpos),
+        tol=1e-4
+    )
+    @time test_fars = test_top_down_pivots(tree, fars, matrixassembler, compressor=compressor)
+    @time trial_fars = trial_top_down_pivots(tree, fars, matrixassembler, compressor=compressor)
 
     lowrankblocks = Vector{H2MatrixBlock{Int, Float64}}(undef, sum([length(far) for far in fars]))
     
@@ -67,8 +74,29 @@ function H2Matrix(
     for levelfars in fars
         for far in levelfars
             ind += 1
-            #row_children = [child[1] for child in test_fars[far[1]].children]
-            #col_children = [child[1] for child in trial_fars[far[2]].children]
+            
+            blk = zeros(
+                Float64, 
+                length(test_fars[far[1]].τ[test_fars[far[1]].M.τ]),
+                length(trial_fars[far[2]].σ[trial_fars[far[2]].M.σ])
+            )
+            matrixassembler(
+                blk,
+                test_fars[far[1]].τ[test_fars[far[1]].M.τ],
+                trial_fars[far[2]].σ[trial_fars[far[2]].M.σ]
+            )
+            lowrankblocks[ind] = H2MatrixBlock(
+                MatrixBlock(
+                    blk,
+                    test_fars[far[1]].τ[test_fars[far[1]].M.τ],
+                    trial_fars[far[2]].σ[trial_fars[far[2]].M.σ]
+                ),
+                test_fars[far[1]].τ,
+                trial_fars[far[2]].σ,
+                far[1],
+                far[2]
+            )
+            #=
             idx = findfirst(x->x==far[2], test_fars[far[1]].roworcolidcs)
             range = test_fars[far[1]].roworcolmap[idx]
             
@@ -80,9 +108,9 @@ function H2Matrix(
                 ),
                 test_fars[far[1]].τ,
                 trial_fars[far[2]].σ,
-                far[1],#row_children,
-                far[2]#col_children
-            )
+                far[1],
+                far[2]
+            )=#
         end
     end
 
@@ -235,8 +263,8 @@ function test_top_down_pivots(
                     append!(col_set, test_lowrankblocks[parent].σ[test_lowrankblocks[parent].M.σ])
                 end
 
-                test_lowrankblocks[c] = getcompressedmatrix(
-                    row_set, col_set, sfar[2],colmaps, childrange, matrixassembler, compressor=compressor
+                test_lowrankblocks[c] = getcompressedmatrix_rm(
+                    row_set, col_set, sfar[2], colmaps, childrange, matrixassembler, compressor=compressor
                 )
             end
         end
@@ -293,7 +321,7 @@ function trial_top_down_pivots(
                     append!(row_set, trial_lowrankblocks[parent].τ[trial_lowrankblocks[parent].M.τ])
                 end
 
-                trial_lowrankblocks[c] = getcompressedmatrix(
+                trial_lowrankblocks[c] = getcompressedmatrix_cm(
                     row_set, col_set, sfar[1], rowmaps, childrange, matrixassembler, compressor=compressor
                 )
             end

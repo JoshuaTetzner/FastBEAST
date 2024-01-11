@@ -126,24 +126,40 @@ function assembler(kernel, matrix, testpoints, sourcepoints)
     end
 end
 
+function c_rate(hmat)
+    elements = 0
+    for lrb in hmat.lowrankblocks
+        elements += size(lrb.M.U, 1)*size(lrb.M.U, 2) + size(lrb.M.V, 1)*size(lrb.M.U, 2)
+    end
+
+    for frb in hmat.fullrankblocks
+        elements += size(frb.M, 1)*size(frb.M, 2) 
+    end
+
+    return elements/(size(hmat, 1)*size(hmat, 2))
+end
 
 ##
 
-N = 10000
+N = 25000
 points = [@SVector rand(3) for i = 1:N]
 
 @views OneoverRkernelassembler(matrix, tdata, sdata) = assembler(OneoverRkernel, matrix, points[tdata], points[sdata])
 
 fmat = assembler(OneoverRkernel, points, points)
 ##
-@time tree = create_CT_tree(points, nchildren=8, nmin=200, maxlevel=7);
+@time tree = create_CT_tree(points, nchildren=2, nmin=200, maxlevel=8);
 block_tree = ClusterTrees.BlockTrees.BlockTree(tree, tree)
 #nears, fars = computeinteractions(block_tree)
-
-##
-@time h2mat = FastBEAST.H2Matrix(OneoverRkernelassembler, block_tree);
+@time h2mat = FastBEAST.H2Matrix(OneoverRkernelassembler, block_tree, points, points);
 
 compression(h2mat)
-##
-fh2mat = (fullmat(h2mat))
+fh2mat = fullmat(h2mat);
 norm(fh2mat-fmat)/norm(fh2mat)
+
+##
+stree = create_tree(points, BoxTreeOptions(nmin=400));
+ttree = create_tree(points, BoxTreeOptions(nmin=400));
+@time hmat = HMatrix(OneoverRkernelassembler, ttree, stree, Int64, Float64, compressor=FastBEAST.ACAOptions(tol=1e-3));
+estimate_reldifference(hmat,fmat)
+c_rate(hmat)

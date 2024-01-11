@@ -75,3 +75,107 @@ function getcompressedmatrix(
         childrange
     )
 end
+
+function getcompressedmatrix_rm(
+    test_idcs::Vector{Int},
+    trial_idcs::Vector{Int},
+    roworcolidcs::Vector{Int},
+    roworcolmaps::Vector{UnitRange{Int}},
+    childrange::Vector{Tuple{Int, UnitRange{Int}}},
+    matrixassembler;
+    compressor=FastBEAST.ACAOptions(tol=1e-4)
+)
+
+    lm = FastLowRankCompression.LazyMatrix(
+        matrixassembler,
+        test_idcs,
+        trial_idcs,
+        Float64
+    )
+
+    if length(test_idcs) < 200 || length(trial_idcs) < 200
+        println("treefail")
+        println(length(test_idcs), " ", length(trial_idcs))
+    end
+
+    maxrank = max(Int(round(
+        length(test_idcs) * length(trial_idcs)/(length(test_idcs) + length(trial_idcs)))),
+        1
+    )
+
+    am = allocate_pca_memory_rm(
+        Float64,
+        length(test_idcs),
+        length(trial_idcs),
+        maxrank=maxrank
+    )
+
+    U, V, rowindices, colindices = FastLowRankCompression.pca_rm(
+        lm,
+        am,
+        compressor.columnpivstrat;
+        maxrank=maxrank,
+        tol=compressor.tol
+    )
+
+    return FastBEAST.Pivotlrb{Float64}(
+        ClusterMatrix(U, V, rowindices, colindices),    
+        test_idcs,
+        trial_idcs,
+        roworcolidcs,
+        roworcolmaps,
+        childrange
+    )
+end
+
+function getcompressedmatrix_cm(
+    test_idcs::Vector{Int},
+    trial_idcs::Vector{Int},
+    roworcolidcs::Vector{Int},
+    roworcolmaps::Vector{UnitRange{Int}},
+    childrange::Vector{Tuple{Int, UnitRange{Int}}},
+    matrixassembler;
+    compressor=FastBEAST.ACAOptions(tol=1e-4)
+)
+
+    lm = FastLowRankCompression.LazyMatrix(
+        matrixassembler,
+        test_idcs,
+        trial_idcs,
+        Float64
+    )
+    
+    if length(test_idcs) < 200 || length(trial_idcs) < 200
+        println("treefail")
+        println(length(test_idcs), " ", length(trial_idcs))
+    end
+
+    maxrank = max(Int(round(
+        length(test_idcs) * length(trial_idcs)/(length(test_idcs) + length(trial_idcs)))),
+        1
+    )
+
+    am = allocate_pca_memory_cm(
+        Float64,
+        length(test_idcs),
+        length(trial_idcs),
+        maxrank=maxrank
+    )
+
+    U, V, rowindices, colindices=  FastLowRankCompression.pca_cm(
+        lm,
+        am,
+        compressor.rowpivstrat;
+        maxrank=maxrank,
+        tol=compressor.tol
+    )
+
+    return FastBEAST.Pivotlrb{Float64}(
+        ClusterMatrix(U, V, rowindices, colindices),    
+        test_idcs,
+        trial_idcs,
+        roworcolidcs,
+        roworcolmaps,
+        childrange
+    )
+end
