@@ -13,6 +13,11 @@ include("fmm.jl")
 include("beast.jl")
 include("fmm/operators/FMMoperator.jl")
 
+include("tree/clustertrees/kmeans.jl")
+include("h2matrix/h2matrix.jl")
+include("h2matrix/fars.jl")
+include("h2matrix/nears.jl")
+
 export BoundingBox
 export getboxframe
 export getchildbox
@@ -37,6 +42,10 @@ export estimate_norm
 export estimate_reldifference
 export nnz
 export compressionrate
+
+export create_CT_tree
+export value
+export computeinteractions
 
 export hassemble
 export fmmassemble
