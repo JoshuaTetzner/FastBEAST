@@ -99,6 +99,7 @@ a = 1.0
 SL = Maxwell3D.singlelayer(wavenumber=k)
 X = raviartthomas(Γ)
 @show length(X.pos)
+
 ##
 T = assemble(SL, X, X)
 
@@ -111,13 +112,12 @@ T = assemble(SL, X, X)
 end
 
 ##
-
 @time tree = create_CT_tree(X.pos, nchildren=2, nmin=200, maxlevel=10);
 block_tree = ClusterTrees.BlockTrees.BlockTree(tree, tree)
 tree.levels
 
-@time length(value(tree, 1))
-##
 @time h2mat = FastBEAST.H2Matrix(
-    assembler, block_tree, ComplexF64
+    assembler, block_tree, ComplexF64, multithreading=false
 );
+
+@test norm(fullmat(h2mat)-T)/norm(T) ≈ 0.0 atol=1e-4

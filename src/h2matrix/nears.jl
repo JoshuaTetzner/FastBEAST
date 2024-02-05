@@ -1,24 +1,35 @@
-function getfullrankblocks(
-    block_tree::ClusterTrees.BlockTrees.BlockTree{T}, nears, assembler, ::Type{K}
-) where {K,T}
-    MBF = MatrixBlock{Int,K,Matrix{K}}
-    nearblocks = MBF[]
-    nonzeros = 0
+using FLoops
 
-    for near in nears
-        nonzeros +=
-            length(value(block_tree.test_cluster, near[1])) *
-            length(value(block_tree.trial_cluster, near[2]))
-        push!(
-            nearblocks,
-            fullmatrix(
+function getfullrankblocks(
+    block_tree::ClusterTrees.BlockTrees.BlockTree{T},
+    nears,
+    assembler,
+    ::Type{K};
+    multithreading=true
+) where {K,T}
+
+    nearblocks = Vector{MatrixBlock{Int,K,Matrix{K}}}(undef, length(nears))
+    
+    if multithreading
+        @floop for (idx,near) in enumerate(nears)
+            nearblocks[idx] = fullmatrix(
                 assembler,
                 value(block_tree.test_cluster, near[1]),
                 value(block_tree.trial_cluster, near[2]),
                 Int,
                 K,
-            ),
-        )
+            )
+        end
+    else
+        for (idx,near) in enumerate(nears)
+            nearblocks[idx] = fullmatrix(
+                assembler,
+                value(block_tree.test_cluster, near[1]),
+                value(block_tree.trial_cluster, near[2]),
+                Int,
+                K,
+            )
+        end
     end
 
     return nearblocks

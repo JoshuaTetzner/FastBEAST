@@ -1,3 +1,5 @@
+using FLoops
+
 rows(lbk::MatrixBlock{I, F, LowRankMatrix{F}}) where F = lbk.τ
 cols(lbk::MatrixBlock{I, F, LowRankMatrix{F}}) where F = lbk.σ
 
@@ -6,6 +8,69 @@ localcols(lbk::MatrixBlock{I, F, LowRankMatrix{F}}) where F= lbk.M.σ
 
 globalrows(lbk::MatrixBlock{I, F, LowRankMatrix{F}}) where F = lbk.τ[lbk.M.τ]
 globalcols(lbk::MatrixBlock{I, F, LowRankMatrix{F}}) where F = lbg.σ[lbk.M.σ]
+
+function getlowrankblocks(
+    assembler::Function,
+    fars::Vector{Vector{Tuple{I,I}}},
+    test_fars::Vector{Pivotlrb{K}},
+    trial_fars::Vector{Pivotlrb{K}};
+    multithreading=true
+) where {I, K}
+    lowrankblocks = Vector{H2MatrixBlock{Int,K}}(undef, sum([length(far) for far in fars]))
+    fars = reduce(vcat, fars)
+
+    if multithreading
+        @floop for (idx, far) in enumerate(fars)
+            blk = zeros(
+                K,
+                length(test_fars[far[1]].τ[test_fars[far[1]].M.τ]),
+                length(trial_fars[far[2]].σ[trial_fars[far[2]].M.σ]),
+            )
+            assembler(
+                blk,
+                test_fars[far[1]].τ[test_fars[far[1]].M.τ],
+                trial_fars[far[2]].σ[trial_fars[far[2]].M.σ],
+            )
+            lowrankblocks[idx] = H2MatrixBlock(
+                MatrixBlock(
+                    blk,
+                    test_fars[far[1]].τ[test_fars[far[1]].M.τ],
+                    trial_fars[far[2]].σ[trial_fars[far[2]].M.σ],
+                ),
+                test_fars[far[1]].τ,
+                trial_fars[far[2]].σ,
+                far[1],
+                far[2],
+            )
+        end
+    else
+        for (idx, far) in enumerate(fars)
+            blk = zeros(
+                K,
+                length(test_fars[far[1]].τ[test_fars[far[1]].M.τ]),
+                length(trial_fars[far[2]].σ[trial_fars[far[2]].M.σ]),
+            )
+            assembler(
+                blk,
+                test_fars[far[1]].τ[test_fars[far[1]].M.τ],
+                trial_fars[far[2]].σ[trial_fars[far[2]].M.σ],
+            )
+            lowrankblocks[idx] = H2MatrixBlock(
+                MatrixBlock(
+                    blk,
+                    test_fars[far[1]].τ[test_fars[far[1]].M.τ],
+                    trial_fars[far[2]].σ[trial_fars[far[2]].M.σ],
+                ),
+                test_fars[far[1]].τ,
+                trial_fars[far[2]].σ,
+                far[1],
+                far[2],
+            )
+        end
+    end
+
+    return lowrankblocks
+end
 
 function getcompressedmatrix(
     test_idcs::Vector{I},
