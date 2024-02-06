@@ -163,12 +163,12 @@ end
         yy = zeros(eltype(y), size(transA, 1), Threads.nthreads())
 
         Threads.@threads for mb in transA.lmap.fullrankblocks
-            mul!(cc[1:size(mb.M, 2), Threads.threadid()], transpose(mb.M), x[mb.τ])
+            mul!(cc[1:size(mb.M, 2), Threads.threadid()], adjoint(mb.M), x[mb.τ])
             yy[mb.σ, Threads.threadid()] .+= cc[1:size(mb.M, 2), Threads.threadid()]
         end
         
         Threads.@threads for mb in transA.lmap.lowrankblocks
-            mul!(cc[1:size(mb.M, 2), Threads.threadid()], transpose(mb.M), x[mb.τ])
+            mul!(cc[1:size(mb.M, 2), Threads.threadid()], adjoint(mb.M), x[mb.τ])
             yy[mb.σ, Threads.threadid()] .+= cc[1:size(mb.M, 2), Threads.threadid()]
         end
 
@@ -528,7 +528,3 @@ function getcompressedmatrix(
 
     return mbl
 end
-
-##
-
-real(ComplexF64)

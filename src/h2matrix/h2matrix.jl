@@ -45,6 +45,174 @@ struct H2Matrix{I,K} <: LinearMaps.LinearMap{K}
     fars
     rowdim::I
     columndim::I
+    ismultithreaded::Bool
+end
+
+function fulltestblock(blks::Vector{FastBEAST.H2BasisBlock{I,K}}, idx::I) where {I,K}
+    if blks[idx].children == []
+        return blks[idx].T
+    else
+        fblk = fulltestblock(blks, blks[idx].children[1]) * blks[idx].T[1]
+        for childidx in 2:length(blks[idx].children)
+            fblk = vcat(
+                fblk,
+                fulltestblock(blks, blks[idx].children[childidx]) * blks[idx].T[childidx],
+            )
+        end
+
+        return fblk
+    end
+end
+
+function fulltrialblock(blks::Vector{FastBEAST.H2BasisBlock{I,K}}, idx::I) where {I,K}
+    if blks[idx].children == []
+        return blks[idx].T
+    else
+        fblk = blks[idx].T[1] * fulltrialblock(blks, blks[idx].children[1])
+        for childidx in 2:length(blks[idx].children)
+            fblk = hcat(
+                fblk,
+                blks[idx].T[childidx] * fulltrialblock(blks, blks[idx].children[childidx]),
+            )
+        end
+
+        return fblk
+    end
+end
+
+function ismultithreaded(h2mat::HT) where {HT<:H2Matrix}
+    return h2mat.ismultithreaded
+end
+
+function Base.size(h2mat::H2Matrix, dim=nothing)
+    if dim === nothing
+        return (h2mat.rowdim, h2mat.columndim)
+    elseif dim == 1
+        return h2mat.rowdim
+    elseif dim == 2
+        return h2mat.columndim
+    else
+        error("dim must be either 1 or 2")
+    end
+end
+
+function Base.size(h2mat::Adjoint{T}, dim=nothing) where {T<:H2Matrix}
+    if dim === nothing
+        return reverse(size(adjoint(h2mat)))
+    elseif dim == 1
+        return size(adjoint(h2mat), 2)
+    elseif dim == 2
+        return size(adjoint(h2mat), 1)
+    else
+        error("dim must be either 1 or 2")
+    end
+end
+
+@views function LinearAlgebra.mul!(y::AbstractVecOrMat, A::H2Matrix, x::AbstractVector)
+    LinearMaps.check_dim_mul(y, A, x)
+
+    fill!(y, zero(eltype(y)))
+
+    if !ismultithreaded(A)
+        for mb in A.fullrankblocks
+            y[mb.τ] .+= mb.M * x[mb.σ]
+        end
+
+        for mb in A.lowrankblocks
+            y[mb.τ] .+=
+                fulltestblock(A.nestedtestbases, mb.row_basis) *
+                mb.Z.M *
+                (fulltrialblock(A.nestedtrialbases, mb.col_basis) * x[mb.σ])
+        end
+    else
+        yy = zeros(eltype(y), size(A, 1), Threads.nthreads())
+
+        @floop for mb in A.fullrankblocks
+            yy[mb.τ, Threads.threadid()] .+= mb.M * x[mb.σ]
+        end
+
+        @floop for mb in A.lowrankblocks
+            yy[mb.τ, Threads.threadid()] .+=
+                fulltestblock(A.nestedtestbases, mb.row_basis) *
+                mb.Z.M *
+                (fulltrialblock(A.nestedtrialbases, mb.col_basis) * x[mb.σ])
+        end
+        y[:] = sum(yy; dims=2)
+    end
+
+    return y
+end
+
+@views function LinearAlgebra.mul!(
+    y::AbstractVecOrMat, transA::LinearMaps.TransposeMap{<:Any,<:H2Matrix}, x::AbstractVector
+)
+    LinearMaps.check_dim_mul(y, transA.lmap, x)
+
+    fill!(y, zero(eltype(y)))
+
+    if !ismultithreaded(transA.lmap)
+        for mb in transA.lmap.fullrankblocks
+            y[mb.σ] .+= transpose(mb.M) * x[mb.τ]
+        end
+
+        for mb in transA.lmap.lowrankblocks
+            y[mb.σ] .+=
+                transpose(fulltrialblock(transA.lmap.nestedtrialbases, mb.col_basis)) *
+                transpose(mb.Z.M) *
+                (transpose(fulltestblock(transA.lmap.nestedtestbases, mb.row_basis)) * x[mb.τ])
+        end
+    else
+        yy = zeros(eltype(y), size(transA.lmap, 1), Threads.nthreads())
+
+        @floop for mb in transA.lmap.fullrankblocks
+            yy[mb.σ, Threads.threadid()] .+= transpose(mb.M) * x[mb.τ]
+        end
+
+        @floop for mb in transA.lmap.lowrankblocks
+            yy[mb.σ, Threads.threadid()] .+=
+                transpose(fulltrialblock(transA.lmap.nestedtrialbases, mb.col_basis)) *
+                transpose(mb.Z.M) *
+                (transpose(fulltestblock(transA.lmap.nestedtestbases, mb.row_basis)) * x[mb.τ])
+        end
+        y[:] = sum(yy; dims=2)
+    end
+end
+
+@views function LinearAlgebra.mul!(
+    y::AbstractVecOrMat, transA::LinearMaps.AdjointMap{<:Any,<:H2Matrix}, x::AbstractVector
+)
+    LinearMaps.check_dim_mul(y, transA.lmap, x)
+
+    fill!(y, zero(eltype(y)))
+
+    if !ismultithreaded(transA.lmap)
+        for mb in transA.lmap.fullrankblocks
+            y[mb.σ] .+= adjoint(mb.M) * x[mb.τ]
+        end
+
+        for mb in transA.lmap.lowrankblocks
+            y[mb.σ] .+=
+                adjoint(fulltrialblock(transA.lmap.nestedtrialbases, mb.col_basis)) *
+                adjoint(mb.Z.M) *
+                (adjoint(fulltestblock(transA.lmap.nestedtestbases, mb.row_basis)) * x[mb.τ])
+        end
+    else
+        yy = zeros(eltype(y), size(transA.lmap, 1), Threads.nthreads())
+
+        @floop for mb in transA.lmap.fullrankblocks
+            yy[mb.σ, Threads.threadid()] .+= adjoint(mb.M) * x[mb.τ]
+        end
+
+        @floop for mb in transA.lmap.lowrankblocks
+            yy[mb.σ, Threads.threadid()] .+=
+                adjoint(fulltrialblock(transA.lmap.nestedtrialbases, mb.col_basis)) *
+                adjoint(mb.Z.M) *
+                (adjoint(fulltestblock(transA.lmap.nestedtestbases, mb.row_basis)) * x[mb.τ])
+        end
+        y[:] = sum(yy; dims=2)
+    end
+
+    return y
 end
 
 function H2Matrix(
@@ -80,7 +248,14 @@ function H2Matrix(
     coldim = length(value(tree.trial_cluster, 1))
 
     return H2Matrix(
-        fullrankblocks, lowrankblocks, test_basis, trial_basis, fars, rowdim, coldim
+        fullrankblocks,
+        lowrankblocks,
+        test_basis,
+        trial_basis,
+        fars,
+        rowdim,
+        coldim,
+        multithreading,
     )
 end
 
